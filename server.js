@@ -2649,6 +2649,18 @@ app.get('/api/calendar/callback', async (req, res) => {
   }
 });
 
+app.post('/api/autopilot/run', requireAuth, async (req, res) => {
+  const { limit = 5, randomize = false } = req.body;
+  setTimeout(async () => {
+    try {
+      await runAutopilotWorkflow(limit, randomize);
+    } catch (err) {
+      console.error('[server] Autopilot workflow failed:', err.message);
+    }
+  }, 100);
+  res.json({ success: true, message: 'Autopilot campaign initiated in the background.' });
+});
+
 // =========================================================================
 // GITHUB & RENDER STATUS (Checkpoint 23)
 // =========================================================================
@@ -2664,6 +2676,386 @@ app.get('/api/integrations/status', requireAuth, async (req, res) => {
     render: { status: 'EXTERNALLY_CONNECTED', type: 'MANUAL_WORKFLOW', note: 'Deploy via Render dashboard. WebCloserAI does not have Render API access in beta.' }
   });
 });
+
+async function runAutopilotWorkflow(limit, randomize = false) {
+  const telegramLog = async (msg) => {
+    console.log(`[Autopilot Backend] ${msg}`);
+    await sendTelegramMessage(`🤖 ${msg}`);
+  };
+
+  try {
+    await telegramLog(`🏁 <b>Starting Autopilot Campaign (limit: ${limit})</b>`);
+
+    const defaultIndustries = ['Dentists', 'Restaurants', 'Beauty Salons', 'Gyms', 'Plumbers', 'Electricians', 'Builders', 'Pest Control', 'Dry Cleaners', 'Daycares', 'House Painters', 'Car detailing'];
+    const defaultLocations = ['Austin', 'Seattle', 'Denver', 'Boston', 'Chicago', 'Miami', 'Atlanta', 'Dallas', 'Phoenix', 'Houston', 'San Diego', 'Philadelphia'];
+
+    let query = defaultIndustries[Math.floor(Math.random() * defaultIndustries.length)];
+    let location = defaultLocations[Math.floor(Math.random() * defaultLocations.length)];
+    let selectionReason = 'randomized';
+
+    if (!randomize) {
+      await telegramLog('Smart Campaign Selection running...');
+      const dbSettings = await db.findRows('settings');
+      const settings = Object.fromEntries(dbSettings.map(item => [item.key, item.value]));
+
+      const targetIndustries = settings.target_industries ? settings.target_industries.split(',').map(i => i.trim()).filter(Boolean) : defaultIndustries;
+      const targetLocations = settings.target_locations ? settings.target_locations.split(',').map(l => l.trim()).filter(Boolean) : defaultLocations;
+
+      const { active, closed } = filterLocationsByBusinessHours(targetLocations);
+      let candidateLocations = targetLocations;
+
+      if (active.length > 0) {
+        candidateLocations = active.map(a => a.name);
+        await telegramLog(`☀️ <b>Active Timezone Routing:</b> Prioritized active cities: ${active.map(a => `${a.name} (${a.hour}:00)`).join(', ')}`);
+      } else {
+        await telegramLog(`🌙 <b>No cities currently in active business hours (9 AM - 5 PM).</b> Proceeding with all: ${closed.map(c => `${c.name} (${c.hour}:00)`).join(', ')}`);
+      }
+
+      let bestCombo = null;
+      let bestReplyRate = 0;
+      if (fs.existsSync(METRICS_FILE)) {
+        const metrics = JSON.parse(fs.readFileSync(METRICS_FILE, 'utf-8'));
+        for (const key in metrics) {
+          const metric = metrics[key];
+          if (metric.sent >= 20) {
+            const replyRate = (metric.replied || 0) / metric.sent;
+            if (replyRate >= 0.05 && replyRate > bestReplyRate) {
+              bestReplyRate = replyRate;
+              bestCombo = { query: metric.query, location: metric.location };
+            }
+          }
+        }
+      }
+
+      if (bestCombo && candidateLocations.includes(bestCombo.location)) {
+        query = bestCombo.query;
+        location = bestCombo.location;
+        selectionReason = 'historical_best';
+      } else {
+        const currentCity = candidateLocations[0] || 'Austin';
+        location = currentCity;
+        query = targetIndustries[Math.floor(Math.random() * targetIndustries.length)];
+        selectionReason = 'cold_start';
+      }
+    }
+
+    await telegramLog(`🎯 <b>Campaign parameters selected:</b>\nQuery: <code>${query}</code>\nLocation: <code>${location}</code>\nSelection: <i>${selectionReason}</i>`);
+
+    await telegramLog(`🔍 <b>Step 1: Discovering leads...</b>`);
+    const apiKey = process.env.GOOGLE_MAPS_DEMO_KEY;
+    if (!apiKey) throw new Error('GOOGLE_MAPS_DEMO_KEY not configured.');
+
+    const searchUrl = 'https://places.googleapis.com/v1/places:searchText';
+    const textQuery = `${query} in ${location}`;
+    const discoverLimit = Math.max(15, limit * 3);
+
+    const placesRes = await fetch(searchUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.rating,places.googleMapsUri,places.primaryType,places.types'
+      },
+      body: JSON.stringify({ textQuery, pageSize: Math.min(discoverLimit, 20) })
+    });
+
+    if (!placesRes.ok) {
+      throw new Error(`Google Places API error: ${await placesRes.text()}`);
+    }
+
+    const placesData = await placesRes.json();
+    const discovered = (placesData.places || []).map(place => ({
+      business_name: place.displayName ? place.displayName.text : '',
+      location: place.formattedAddress || '',
+      public_phone: place.nationalPhoneNumber || '',
+      public_website: place.websiteUri || '',
+      category: place.primaryType || (place.types || []).slice(0, 3).join(', '),
+      source: `Autopilot: ${query} in ${location}`,
+      discovery_date: new Date().toISOString()
+    }));
+
+    await telegramLog(`✅ Discovered <b>${discovered.length}</b> businesses.`);
+    if (discovered.length === 0) return;
+
+    await telegramLog(`📥 <b>Step 2: Importing leads into CRM...</b>`);
+    const savedLeads = [];
+    for (const item of discovered) {
+      if (isDuplicateLead(item)) {
+        const existing = (store.leads || []).find(l => normalizeValue(l.business_name) === normalizeValue(item.business_name));
+        if (existing && ['NEW', 'DISCOVERED', 'ANALYZED', 'QUALIFIED', 'CONTACT_READY'].includes(existing.stage)) {
+          savedLeads.push(existing);
+        }
+        continue;
+      }
+
+      const now = new Date().toISOString();
+      const { score, rulesTriggered } = calculateLeadScore({
+        public_website: item.public_website, public_email: '', public_phone: item.public_phone,
+        whatsapp: '', instagram: '', other_contact: '',
+        contact_validity: 'UNKNOWN', category: item.category, location: item.location
+      });
+
+      const lead = {
+        id: uuidv4(), business_name: item.business_name, category: item.category || '', location: item.location || '',
+        public_website: item.public_website, public_email: '', public_phone: item.public_phone,
+        whatsapp: '', instagram: '', other_contact: '',
+        preferred_contact_method: item.public_website ? 'Email' : 'Phone',
+        contact_validity: 'UNKNOWN', last_contact_date: '', next_follow_up_date: '',
+        opt_out: false, source: item.source, discovery_date: now,
+        stage: 'NEW', score, priority: calculatePriority(score),
+        qualification_reason: 'Imported via Autopilot', status: 'ACTIVE',
+        stage_history: [{ stage: 'NEW', changed_at: now }],
+        created_at: now, updated_at: now
+      };
+
+      await db.insertRow('leads', lead);
+      store.leads.push(lead);
+      await db.insertRow('scoring_results', {
+        id: uuidv4(), lead_id: lead.id, score, priority: lead.priority,
+        qualification_status: 'PENDING', rules_triggered: rulesTriggered,
+        qualification_reason: lead.qualification_reason, created_at: now
+      });
+      await db.insertRow('lead_stage_history', { id: uuidv4(), lead_id: lead.id, stage: 'NEW', changed_at: now, created_at: now });
+      savedLeads.push(lead);
+    }
+
+    await telegramLog(`CRM: Imported <b>${savedLeads.length}</b> leads.`);
+    if (savedLeads.length === 0) return;
+
+    await telegramLog(`🕸️ <b>Step 3: Auditing websites & extracting emails...</b>`);
+    const analyzedLeads = [];
+    for (let i = 0; i < savedLeads.length; i++) {
+      const lead = savedLeads[i];
+      if (!lead.public_website) continue;
+      
+      await telegramLog(`Analyzing site (${i + 1}/${savedLeads.length}): <code>${lead.public_website}</code>`);
+      try {
+        const analysis = await analyzeWebsiteForLead(lead);
+        const email = analysis.extracted_email || null;
+        
+        const stage = 'ANALYZED';
+        const now = new Date().toISOString();
+        
+        const updates = {
+          website_analysis: analysis,
+          stage,
+          updated_at: now
+        };
+        if (email) updates.public_email = email;
+        
+        const updatedLead = await db.updateRow('leads', lead.id, updates);
+        
+        const memIdx = store.leads.findIndex(l => l.id === lead.id);
+        if (memIdx !== -1) store.leads[memIdx] = updatedLead;
+
+        await db.insertRow('lead_stage_history', { id: uuidv4(), lead_id: lead.id, stage, changed_at: now, created_at: now });
+        
+        if (email) {
+          await telegramLog(`📧 Extracted Email: <code>${email}</code> for <b>${lead.business_name}</b>`);
+        }
+        analyzedLeads.push(updatedLead);
+      } catch (err) {
+        console.error('Audit failed for:', lead.business_name, err.message);
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    await telegramLog(`📈 <b>Step 4: Scoring and Qualifying Leads...</b>`);
+    const qualifiedLeads = [];
+    for (const lead of analyzedLeads) {
+      const { score, rulesTriggered } = calculateLeadScore(lead);
+      const priority = calculatePriority(score);
+      const qualified = score >= 40 && lead.public_email;
+      
+      const now = new Date().toISOString();
+      const updates = {
+        score,
+        priority,
+        qualification_reason: qualified ? 'Qualified: Has email & needs optimization' : 'Disqualified: Low score or no email',
+        stage: qualified ? 'QUALIFIED' : lead.stage,
+        updated_at: now
+      };
+      
+      const updatedLead = await db.updateRow('leads', lead.id, updates);
+      
+      const memIdx = store.leads.findIndex(l => l.id === lead.id);
+      if (memIdx !== -1) store.leads[memIdx] = updatedLead;
+
+      if (qualified) {
+        await db.insertRow('lead_stage_history', { id: uuidv4(), lead_id: lead.id, stage: 'QUALIFIED', changed_at: now, created_at: now });
+        qualifiedLeads.push(updatedLead);
+      }
+    }
+
+    await telegramLog(`Qualified: <b>${qualifiedLeads.length}</b> leads. Preparing drafts...`);
+    if (qualifiedLeads.length === 0) return;
+
+    await telegramLog(`✍️ <b>Step 5: Generating personalized emails...</b>`);
+    const drafts = [];
+    for (let i = 0; i < Math.min(qualifiedLeads.length, limit); i++) {
+      const lead = qualifiedLeads[i];
+      try {
+        const emailData = await aiService.generateEmail(lead.id, {
+          tone: 'Professional',
+          lang: 'English',
+          service: 'Web Design, Development, SEO',
+          regenerate: false
+        });
+
+        if (emailData && emailData.body) {
+          const now = new Date().toISOString();
+          const outreachMsg = {
+            id: uuidv4(),
+            lead_id: lead.id,
+            contact_id: null,
+            template_id: null,
+            channel: 'email',
+            subject: emailData.subject || 'Outreach Pitch',
+            body: emailData.body,
+            personalization: {},
+            status: 'DRAFT',
+            sent_at: null,
+            error: null,
+            external_id: null,
+            metadata: {},
+            created_at: now,
+            updated_at: now
+          };
+          const savedMsg = await db.insertRow('outreach_messages', outreachMsg);
+          drafts.push({ message: savedMsg, lead });
+          await telegramLog(`Draft created: <b>${lead.business_name}</b>`);
+        }
+      } catch (err) {
+        console.error('Draft generation failed:', err.message);
+      }
+      await new Promise(resolve => setTimeout(resolve, 4000));
+    }
+
+    await telegramLog(`✉️ <b>Step 6: Sending emails via Gmail...</b>`);
+    let sentCount = 0;
+    for (let i = 0; i < drafts.length; i++) {
+      const { message, lead } = drafts[i];
+      try {
+        await db.updateRow('outreach_messages', message.id, { status: 'QUEUED', updated_at: new Date().toISOString() });
+        
+        let accessToken = await getValidGmailToken();
+        if (accessToken) {
+          const emailHeader = [
+            `To: ${lead.public_email}`,
+            `Subject: ${message.subject}`,
+            'Content-Type: text/html; charset=utf-8',
+            'MIME-Version: 1.0',
+            '',
+            message.body.replace(/\n/g, '<br>')
+          ].join('\n');
+
+          const base64Safe = Buffer.from(emailHeader).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          const gmailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
+          const gmailRes = await fetch(gmailUrl, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw: base64Safe })
+          });
+
+          if (gmailRes.ok) {
+            const data = await gmailRes.json();
+            const now = new Date().toISOString();
+            await db.updateRow('outreach_messages', message.id, {
+              status: 'SENT',
+              sent_at: now,
+              metadata: JSON.stringify({ gmail_id: data.id, thread_id: data.threadId }),
+              updated_at: now
+            });
+            await db.updateRow('leads', lead.id, { stage: 'CONTACTED', last_contact_date: now, updated_at: now });
+            await db.insertRow('lead_stage_history', { id: uuidv4(), lead_id: lead.id, stage: 'CONTACTED', changed_at: now, created_at: now });
+            await logActivity('Outreach sent via Gmail', 'Outreach', message.id, `Email sent to ${lead.public_email} using connected Gmail account.`);
+            
+            await incrementCampaignMetric(query, location, 'sent', 1);
+            
+            sentCount++;
+            await telegramLog(`✅ Sent email to: <code>${lead.public_email}</code>`);
+          } else {
+            console.error('Gmail send error response:', await gmailRes.text());
+          }
+        }
+      } catch (err) {
+        console.error('Send execution failed:', err.message);
+      }
+
+      if (i < drafts.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 8000));
+      }
+    }
+
+    await telegramLog(`🏆 <b>Autopilot Campaign Complete!</b>\nSuccessfully sent: <b>${sentCount}</b> emails.\nNiche: <code>${query}</code> in <code>${location}</code>.`);
+  } catch (err) {
+    await telegramLog(`❌ <b>Autopilot Failed:</b> ${err.message}`);
+  }
+}
+
+let lastTelegramUpdateId = 0;
+async function pollTelegramBot() {
+  try {
+    let token = process.env.TELEGRAM_BOT_TOKEN;
+    let chatId = process.env.TELEGRAM_CHAT_ID;
+
+    if (!token || !chatId) {
+      const dbSettings = await db.findRows('settings');
+      const settingsMap = Object.fromEntries(dbSettings.map(item => [item.key, item.value]));
+      token = token || settingsMap['telegram_bot_token'];
+      chatId = chatId || settingsMap['telegram_chat_id'];
+    }
+
+    if (!token || !chatId || token.trim() === '' || chatId.trim() === '') {
+      return;
+    }
+
+    const url = `https://api.telegram.org/bot${token.trim()}/getUpdates?offset=${lastTelegramUpdateId + 1}&timeout=5`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const updates = data.result || [];
+    for (const update of updates) {
+      lastTelegramUpdateId = update.update_id;
+      const message = update.message;
+      if (message && message.text) {
+        const text = message.text.trim().toLowerCase();
+        const senderChatId = String(message.chat.id);
+        
+        if (senderChatId !== chatId.trim()) {
+          continue;
+        }
+
+        if (text.startsWith('/autopilot') || text.startsWith('/run')) {
+          const parts = text.split(/\s+/);
+          let limit = 5;
+          if (parts[1] && !isNaN(parts[1])) {
+            limit = parseInt(parts[1], 10);
+          }
+          const randomize = text.includes('random');
+          
+          await sendTelegramMessage(`🚀 <b>Autopilot Triggered via Telegram!</b>\nTargeting up to <b>${limit}</b> leads (mode: ${randomize ? 'Randomized' : 'Smart Timezone'}). Running campaign...`);
+          
+          setTimeout(async () => {
+            try {
+              await runAutopilotWorkflow(limit, randomize);
+            } catch (err) {
+              await sendTelegramMessage(`❌ <b>Autopilot Error:</b> ${err.message}`);
+            }
+          }, 100);
+        } else if (text === '/status') {
+          const stats = await getDashboardStats();
+          await sendTelegramMessage(`📊 <b>WebCloserAI Status:</b>\nTotal Leads: ${stats.totalLeads}\nContacted: ${stats.contactedLeads}\nInterested: ${stats.interestedClients}\nMeetings Booked: ${stats.meetingsBooked || 0}`);
+        } else if (text === '/help' || text === '/start') {
+          await sendTelegramMessage(`🤖 <b>Available commands:</b>\n• <code>/autopilot [limit]</code> - Start smart autopilot (e.g. <code>/autopilot 5</code>)\n• <code>/status</code> - View database stats\n• <code>/help</code> - Show commands`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[server] Telegram polling error:', err.message);
+  }
+}
 
 const METRICS_FILE = path.join(__dirname, 'data', 'campaign_metrics.json');
 async function incrementCampaignMetric(query, location, field, increment = 1, reason = '') {
@@ -2721,6 +3113,12 @@ async function startServer() {
     }
     await ensureDefaults();
     console.log('[server] Defaults initialized');
+    
+    // Start Telegram Polling Loop (only when running directly, not imported in tests)
+    if (require.main === module) {
+      setInterval(pollTelegramBot, 10000);
+      console.log('[server] Telegram Bot polling active');
+    }
   } catch (err) {
     console.error('[server] Startup error:', err.message);
   }
