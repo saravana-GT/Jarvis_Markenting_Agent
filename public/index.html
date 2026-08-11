@@ -1,0 +1,3223 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jarvis Agency Platform</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --muted: #94a3b8;
+        --text: #f8fafc;
+        --accent: #38bdf8;
+        --accent-2: #818cf8;
+        --border: #1f2937;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+      .app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+      .sidebar { background: #020617; padding: 24px 16px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: space-between; }
+      .brand { font-size: 1.4rem; font-weight: 700; margin-bottom: 24px; color: var(--accent); letter-spacing: 1px; }
+      .nav button { display: block; width: 100%; text-align: left; background: transparent; border: 0; color: var(--muted); padding: 12px 14px; margin: 6px 0; border-radius: 8px; cursor: pointer; font-size: 0.95rem; transition: all 0.2s ease; }
+      .nav button.active, .nav button:hover { background: var(--panel); color: var(--text); border-left: 3px solid var(--accent); }
+      .logout-btn { background: rgba(239, 68, 68, 0.1) !important; color: var(--danger) !important; }
+      .main { padding: 24px; overflow-y: auto; }
+      .hero { background: linear-gradient(135deg, var(--accent), var(--accent-2)); padding: 24px; border-radius: 16px; margin-bottom: 24px; color: #082f49; }
+      .hero h1 { margin: 0 0 8px 0; font-size: 1.8rem; }
+      .hero p { margin: 0; opacity: 0.9; }
+      .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+      .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+      .card h3, .card h4 { margin-top: 0; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px; }
+      .grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px; }
+      .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+      .list { display: flex; flex-direction: column; gap: 12px; }
+      .row { background: #0b1220; padding: 14px; border-radius: 10px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+      .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(56,189,248,0.15); color: #bae6fd; font-size: 0.8rem; font-weight: 600; }
+      .pill-success { background: rgba(16, 185, 129, 0.15); color: #a7f3d0; }
+      .pill-warning { background: rgba(245, 158, 11, 0.15); color: #fde68a; }
+      .pill-danger { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+      .table { width: 100%; border-collapse: collapse; }
+      .table th, .table td { padding: 12px; border-bottom: 1px solid var(--border); }
+      .table th { text-align: left; color: var(--muted); font-size: 0.9rem; font-weight: 600; }
+      .table tr:hover { background: #0d1725; cursor: pointer; }
+      .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
+      .toolbar input, .toolbar select { width: auto; }
+      .detail-panel { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; }
+      form { display: flex; flex-direction: column; gap: 12px; }
+      .form-group { display: flex; flex-direction: column; gap: 6px; }
+      .form-group label { font-size: 0.85rem; color: var(--muted); }
+      input, select, textarea { padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: #0b1220; color: var(--text); font-size: 0.95rem; outline: none; }
+      input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+      button { padding: 12px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; border: 0; transition: all 0.2s ease; }
+      button.primary { background: var(--accent); color: #082f49; }
+      button.primary:hover { background: #7dd3fc; }
+      button.secondary { background: rgba(148, 163, 184, 0.1); color: var(--text); border: 1px solid var(--border); }
+      button.secondary:hover { background: rgba(148, 163, 184, 0.2); }
+      button.danger { background: var(--danger); color: white; }
+      button.danger:hover { background: #f87171; }
+      .header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+      .header .user-info { color: var(--muted); font-size: 0.95rem; }
+      .hidden { display: none !important; }
+      .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 15px; }
+      .kanban-column { flex: 0 0 280px; background: #020617; border: 1px solid var(--border); border-radius: 12px; padding: 15px; min-height: 400px; display: flex; flex-direction: column; gap: 12px; }
+      .kanban-column h4 { margin: 0 0 10px 0; display: flex; justify-content: space-between; align-items: center; font-size: 1rem; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+      .kanban-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; cursor: pointer; transition: transform 0.2s; }
+      .kanban-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+      .kanban-card h5 { margin: 0 0 8px 0; font-size: 0.95rem; }
+      .kanban-card p { margin: 0; font-size: 0.8rem; color: var(--muted); }
+      .notification-item { border-left: 4px solid var(--accent); }
+      .notification-item.read { border-left: 4px solid var(--border); opacity: 0.7; }
+      @media (max-width: 900px) {
+        .app { grid-template-columns: 1fr; }
+        .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+        .grid, .detail-panel { grid-template-columns: 1fr; }
+      }
+      .tab-btn {
+        background: transparent;
+        border: none;
+        color: var(--muted);
+        padding: 8px 16px;
+        cursor: pointer;
+        font-weight: 500;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s ease;
+      }
+      .tab-btn:hover {
+        color: var(--text);
+      }
+      .tab-btn.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      .ai-tab-view {
+        display: block;
+      }
+      .ai-tab-view.hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div>
+          <div class="brand">Jarvis</div>
+          <nav class="nav" id="sidebarNav">
+            <button class="active" data-tab="dashboard">Dashboard</button>
+            <button data-tab="leads">Leads</button>
+            <button data-tab="ai-assistant">AI Assistant</button>
+            <button data-tab="pipeline">Pipeline</button>
+            <button data-tab="outreach">Outreach</button>
+            <button data-tab="email-approvals">Email Approvals</button>
+            <button data-tab="autopilot">🚀 Autopilot</button>
+            <button data-tab="inbox">Inbox</button>
+            <button data-tab="meetings">Meetings</button>
+            <button data-tab="projects">Projects</button>
+            <button data-tab="approvals">Approvals</button>
+            <button data-tab="payments">Payments</button>
+            <button data-tab="reports">Reports</button>
+            <button data-tab="notifications">Notifications</button>
+            <button data-tab="settings">Settings</button>
+          </nav>
+        </div>
+        <div>
+          <button class="logout-btn" id="logoutButton">Sign Out</button>
+        </div>
+      </aside>
+      <main class="main">
+        <div class="header">
+          <div>
+            <h1 id="viewTitle">Agency operations dashboard</h1>
+            <p class="muted" id="viewDescription">A stable local-first foundation for manual lead, outreach, and project management.</p>
+          </div>
+          <div class="user-info" id="userInfo">Loading owner...</div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- DASHBOARD TAB -->
+        <!-- ========================================== -->
+        <div id="tab-dashboard" class="tab-view">
+          <div class="stats" id="stats"></div>
+          <div class="grid">
+            <section class="card">
+              <h3>Recent activity</h3>
+              <div id="activity" class="list"></div>
+            </section>
+            <section class="card">
+              <h3>Integrations Status</h3>
+              <div id="integrationsList" class="list"></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- LEADS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-leads" class="tab-view hidden">
+          <div class="grid">
+            <section class="card">
+              <h3>New lead capture</h3>
+              <form id="leadForm">
+                <input name="businessName" placeholder="Business name" required />
+                <input name="category" placeholder="Category" />
+                <input name="location" placeholder="City / State" />
+                <input name="publicWebsite" placeholder="Public website" />
+                <input name="publicEmail" placeholder="Public email" />
+                <input name="publicPhone" placeholder="Public phone" />
+                <input name="source" placeholder="Source" />
+                <button class="primary" type="submit">Save lead</button>
+              </form>
+              <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
+                <h3>Lead Discovery (Places API)</h3>
+                <form id="discoverForm">
+                  <input name="query" placeholder="e.g. Restaurants" required />
+                  <input name="location" placeholder="e.g. New York" />
+                  <input name="limit" type="number" value="3" min="1" max="5" />
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; margin-top: 5px; margin-bottom: 10px; cursor: pointer; color: var(--muted);">
+                    <input type="checkbox" name="noWebsiteSearch" checked /> Hide businesses with websites
+                  </label>
+                  <button class="primary" type="submit">Search Google Places</button>
+                </form>
+                <div id="discoveryResults" class="list" style="margin-top: 15px;"></div>
+              </div>
+            </section>
+            <section class="card">
+              <div class="toolbar" style="gap: 12px; align-items: center;">
+                <input id="searchInput" placeholder="Search leads" />
+                <select id="stageFilter">
+                  <option value="">All stages</option>
+                </select>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; color: var(--muted); white-space: nowrap;">
+                  <input type="checkbox" id="noWebsiteFilter" /> No website only
+                </label>
+              </div>
+              <h3>Leads list</h3>
+              <div class="detail-panel" style="grid-template-columns: 1fr;">
+                <div class="card" style="overflow-x:auto; padding: 0;">
+                  <table class="table" id="leadTable"></table>
+                </div>
+                <div class="card" id="leadDetail"></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PIPELINE TAB -->
+        <!-- ========================================== -->
+        <div id="tab-pipeline" class="tab-view hidden">
+          <div class="kanban-board" id="kanbanBoard"></div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- OUTREACH TAB -->
+        <!-- ========================================== -->
+        <div id="tab-outreach" class="tab-view hidden">
+          <div class="grid">
+            <section class="card">
+              <h3>Create Outreach Template</h3>
+              <form id="templateForm">
+                <input name="name" placeholder="Template Name" required />
+                <input name="subject" placeholder="Email Subject" />
+                <select name="channel">
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="sms">SMS</option>
+                </select>
+                <input name="category" placeholder="Category (e.g. cold, follow-up)" />
+                <textarea name="body" placeholder="Message body (use variables like {business_name}, {contact_name})" rows="5" required></textarea>
+                <button class="primary" type="submit">Save Template</button>
+              </form>
+              <div style="margin-top: 20px;">
+                <h3>Templates List</h3>
+                <div id="templatesList" class="list"></div>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Create Outreach Message Draft</h3>
+              <form id="outreachMsgForm">
+                <div class="form-group">
+                  <label>Select Lead</label>
+                  <select name="lead_id" id="outreachLeadSelect" required>
+                    <option value="">Select a Lead</option>
+                  </select>
+                </div>
+                
+                <div class="form-group">
+                  <label>Select Template (Optional)</label>
+                  <select name="template_id" id="outreachTemplateSelect">
+                    <option value="">Select a Template (Optional)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>Channel</label>
+                  <select name="channel" id="outreachChannelSelect">
+                    <option value="email" selected>Email</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="proposal">Proposal</option>
+                  </select>
+                </div>
+
+                <div class="form-group" id="outreachEmailGroup">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <label style="margin:0; font-size:0.85rem;">Subject Override</label>
+                    <button class="secondary" type="button" id="btnAiOutreachSubject" style="padding:4px 8px; font-size:0.75rem; background:linear-gradient(135deg, #4f46e5, #06b6d4); color:white; border:none; margin:0;">✨ AI Generate</button>
+                  </div>
+                  <input name="subject" id="outreachSubjectInput" placeholder="Subject Line" />
+                  
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; margin-top:10px;">
+                    <label style="margin:0; font-size:0.85rem;">Email Body</label>
+                    <button class="secondary" type="button" id="btnAiOutreachBody" style="padding:4px 8px; font-size:0.75rem; background:linear-gradient(135deg, #4f46e5, #06b6d4); color:white; border:none; margin:0;">✨ AI Generate</button>
+                  </div>
+                  <textarea name="body" id="outreachBodyTextarea" placeholder="Email message content" rows="5" required></textarea>
+                </div>
+
+                <div class="form-group hidden" id="outreachWhatsappGroup">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <label style="margin:0; font-size:0.85rem;">WhatsApp Message</label>
+                    <button class="secondary" type="button" id="btnAiOutreachWhatsapp" style="padding:4px 8px; font-size:0.75rem; background:linear-gradient(135deg, #4f46e5, #06b6d4); color:white; border:none; margin:0;">✨ AI Generate</button>
+                  </div>
+                  <textarea name="whatsapp_body" id="outreachWhatsappTextarea" placeholder="WhatsApp message content" rows="4"></textarea>
+                </div>
+
+                <div class="form-group hidden" id="outreachProposalGroup">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <label style="margin:0; font-size:0.85rem;">Proposal Markdown</label>
+                    <button class="secondary" type="button" id="btnAiOutreachProposal" style="padding:4px 8px; font-size:0.75rem; background:linear-gradient(135deg, #4f46e5, #06b6d4); color:white; border:none; margin:0;">✨ AI Generate</button>
+                  </div>
+                  <textarea name="proposal_body" id="outreachProposalTextarea" placeholder="Proposal Markdown content" rows="8"></textarea>
+                </div>
+
+                <button class="primary" type="submit" style="margin-top:15px; width:100%;">Create Draft</button>
+              </form>
+              <div style="margin-top: 20px;">
+                <h3>Outreach Status Queue</h3>
+                <div id="outreachQueueList" class="list"></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- EMAIL APPROVALS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-email-approvals" class="tab-view hidden">
+          <section class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 15px;">
+              <div>
+                <h3 style="margin:0;">Pending Email & Outreach Approvals</h3>
+                <p class="muted" style="margin: 5px 0 0 0;">Review generated email drafts before they are queued or sent to leads.</p>
+              </div>
+              <button class="primary" id="btnApproveAndSendAll" style="margin:0; background: linear-gradient(135deg, #10b981, #059669);">🚀 Approve & Send All</button>
+            </div>
+            <div id="emailApprovalsList" class="list" style="display: flex; flex-direction: column; gap: 20px;"></div>
+          </section>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- AUTOPILOT TAB -->
+        <!-- ========================================== -->
+        <div id="tab-autopilot" class="tab-view hidden">
+          <div class="grid">
+            <section class="card">
+              <h3>🚀 Campaign Autopilot</h3>
+              <p class="muted">Run an automated end-to-end campaign with a single click. This engine will discover new businesses, import them into your CRM, analyze & score them, draft personalized cold outreach emails via Gemini, and send them using your Gmail account.</p>
+              
+              <form id="autopilotForm" style="margin-top: 15px;">
+                <div class="form-group">
+                  <label>Number of Leads to Process (Max 100)</label>
+                  <input name="limit" type="number" min="1" max="100" value="10" required />
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 15px;">
+                  <input type="checkbox" id="autopilotRandomize" name="randomize" style="width: auto; margin: 0;" />
+                  <label for="autopilotRandomize" style="margin: 0; font-size: 0.9rem;">Choose randomly from global English defaults (ignores local settings)</label>
+                </div>
+                <button class="primary" type="submit" id="btnLaunchAutopilot" style="margin-top: 20px; width: 100%; font-weight: bold; background: linear-gradient(135deg, #a855f7, #6366f1); border: none;">🔥 Start E2E Campaign Autopilot</button>
+              </form>
+            </section>
+
+            <section class="card">
+              <h3>🛰️ Live Autopilot Console</h3>
+              <div id="autopilotStatusBoard" style="min-height: 300px; background: var(--bg-dark); border: 1px solid var(--border); padding: 20px; border-radius: 8px; font-family: monospace; font-size: 0.9rem; overflow-y: auto; max-height: 450px; color: #10b981; line-height: 1.5;">
+                <div class="muted">// Autopilot console ready... waiting for launch.</div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- INBOX TAB -->
+        <!-- ========================================== -->
+        <div id="tab-inbox" class="tab-view hidden">
+          <div class="grid">
+            <section class="card">
+              <h3>Simulator: Receive Reply from Lead</h3>
+              <form id="inboundReplyForm">
+                <select name="lead_id" id="replyLeadSelect" required>
+                  <option value="">Select a Lead</option>
+                </select>
+                <input name="subject" placeholder="Email Subject" />
+                <textarea name="body" placeholder="Reply content..." rows="4" required></textarea>
+                <button class="primary" type="submit">Simulate Incoming Reply</button>
+              </form>
+            </section>
+            <section class="card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Conversation History</h3>
+                <button class="primary" id="btnSyncGmail" style="padding: 6px 12px; font-size: 0.85rem;">Sync Gmail Replies</button>
+              </div>
+              <div id="conversationsList" class="list"></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MEETINGS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-meetings" class="tab-view hidden">
+          <div class="grid">
+            <section class="card">
+              <h3>OAuth Configuration</h3>
+              <div class="list">
+                <div class="row">
+                  <div>
+                    <strong>Gmail Connection</strong>
+                    <div class="muted" id="gmailStatusText">Checking...</div>
+                  </div>
+                  <button class="primary" id="btnGmailAuth">Connect Gmail</button>
+                </div>
+                <div class="row">
+                  <div>
+                    <strong>Google Calendar Connection</strong>
+                    <div class="muted" id="calendarStatusText">Checking...</div>
+                  </div>
+                  <button class="primary" id="btnCalendarAuth">Connect Calendar</button>
+                </div>
+              </div>
+              <div style="margin-top: 25px;">
+                <h3>Schedule a Meeting</h3>
+                <form id="meetingForm">
+                  <select name="lead_id" id="meetingLeadSelect" required>
+                    <option value="">Select a Lead</option>
+                  </select>
+                  <input name="title" placeholder="Meeting Title" required />
+                  <input name="scheduled_at" type="datetime-local" required />
+                  <input name="duration_minutes" type="number" value="30" placeholder="Duration (min)" />
+                  <input name="location" placeholder="Location/URL" />
+                  <textarea name="description" placeholder="Description / Agenda" rows="3"></textarea>
+                  <button class="primary" type="submit">Schedule Meeting</button>
+                </form>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Scheduled Meetings</h3>
+              <div id="meetingsList" class="list"></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PROJECTS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-projects" class="tab-view hidden">
+          <div class="grid">
+            <section class="card">
+              <h3>Initialize Project</h3>
+              <form id="projectForm">
+                <select name="lead_id" id="projectLeadSelect" required>
+                  <option value="">Select Won Lead</option>
+                </select>
+                <input name="name" placeholder="Project Name" required />
+                <textarea name="description" placeholder="Project description..." rows="3"></textarea>
+                <input name="deadline" type="date" />
+                <button class="primary" type="submit">Create Project</button>
+              </form>
+              <div style="margin-top: 20px;">
+                <h3>Active Projects</h3>
+                <div id="projectsList" class="list"></div>
+              </div>
+            </section>
+            <section class="card" id="projectWorkArea" class="hidden">
+              <h3 id="currentProjectTitle">Select a project</h3>
+              <div id="projectDetailsSection" class="hidden">
+                <div style="margin-bottom: 20px;">
+                  <span class="pill" id="projectStatusPill">PLANNING</span>
+                  <p id="projectDescPText"></p>
+                </div>
+
+                <!-- TASK CHECKLIST -->
+                <div class="card">
+                  <h4>Tasks List</h4>
+                  <form id="projectTaskForm" style="margin-bottom: 15px;">
+                    <input name="title" placeholder="Add task title" required />
+                    <button class="primary" type="submit">+ Task</button>
+                  </form>
+                  <div id="projectTasksList" class="list"></div>
+                </div>
+
+                <!-- DEMOS & REVISIONS -->
+                <div class="card">
+                  <h4>Demo & Revisions</h4>
+                  <form id="demoForm" style="margin-bottom: 15px;">
+                    <input name="demo_url" placeholder="Demo/Preview URL" required />
+                    <input name="description" placeholder="Description (e.g. Version 1)" />
+                    <button class="primary" type="submit">Share Demo</button>
+                  </form>
+                  <div id="projectDemosList" class="list" style="margin-bottom: 15px;"></div>
+                  
+                  <h4>Client Feedback Simulator</h4>
+                  <form id="feedbackForm" style="margin-bottom: 15px;">
+                    <input name="rating" type="number" min="1" max="5" placeholder="Rating (1-5)" required />
+                    <textarea name="comments" placeholder="Client comments..." required></textarea>
+                    <button class="primary" type="submit">Submit Mock Client Feedback</button>
+                  </form>
+                  <div id="projectFeedbackList" class="list" style="margin-bottom: 15px;"></div>
+
+                  <h4>Request Revision</h4>
+                  <form id="revisionForm">
+                    <textarea name="description" placeholder="Revision requested details..." required></textarea>
+                    <button class="danger" type="submit">File Revision Request</button>
+                  </form>
+                  <div id="projectRevisionsList" class="list"></div>
+                </div>
+
+                <!-- FINAL DELIVERY -->
+                <div class="card">
+                  <h4>Project Delivery</h4>
+                  <form id="deliveryForm">
+                    <input name="production_url" id="deliveryProductionUrl" placeholder="Production URL" />
+                    <button class="primary" type="submit">Mark Delivered</button>
+                  </form>
+                  <div id="deliveryIssues" style="color: var(--danger); margin-top: 10px;"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- APPROVALS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-approvals" class="tab-view hidden">
+          <section class="card">
+            <h3>Approval Requests</h3>
+            <div id="approvalsList" class="list"></div>
+          </section>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PAYMENTS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-payments" class="tab-view hidden">
+          <div class="grid">
+            <section class="card">
+              <h3>Record Client Payment</h3>
+              <form id="paymentForm">
+                <select name="lead_id" id="paymentLeadSelect" required>
+                  <option value="">Select Lead</option>
+                </select>
+                <input name="total" type="number" placeholder="Total Deal Value" required />
+                <input name="advance" type="number" placeholder="Advance Paid" />
+                <input name="reference" placeholder="Payment Reference ID" />
+                <textarea name="notes" placeholder="Notes..."></textarea>
+                <button class="primary" type="submit">Track Payment</button>
+              </form>
+            </section>
+            <section class="card">
+              <h3>Payments Ledger</h3>
+              <div id="paymentsList" class="list"></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- REPORTS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-reports" class="tab-view hidden">
+          <section class="card">
+            <h3>Date Range Filters</h3>
+            <div class="toolbar">
+              <input type="date" id="reportFrom" />
+              <input type="date" id="reportTo" />
+              <button class="primary" id="btnFilterReports">Generate Report</button>
+            </div>
+          </section>
+          <div class="grid-3" id="reportsStats"></div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- NOTIFICATIONS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-notifications" class="tab-view hidden">
+          <section class="card">
+            <div class="toolbar" style="justify-content: space-between;">
+              <h3>Notifications Alert Panel</h3>
+              <button class="secondary" id="btnReadAllNotifications">Mark All as Read</button>
+            </div>
+            <div id="notificationsList" class="list"></div>
+          </section>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- AI SALES ASSISTANT TAB -->
+        <!-- ========================================== -->
+        <div id="tab-ai-assistant" class="tab-view hidden">
+          <div class="grid" style="grid-template-columns: 1fr 2fr; gap: 20px;">
+            
+            <!-- Left panel: Context & Settings -->
+            <section class="card" style="display: flex; flex-direction: column; gap: 15px;">
+              <h3>AI Assistant Context</h3>
+              
+              <div class="form-group">
+                <label>Select Lead</label>
+                <select id="aiLeadSelect" style="width: 100%;" required>
+                  <option value="">Select a Lead</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Target Service Pitch</label>
+                <input id="aiServiceInput" type="text" placeholder="e.g. Web Design, SEO, Mobile Apps" value="Web Design & Development" />
+              </div>
+
+              <div class="form-group">
+                <label>Desired Tone</label>
+                <select id="aiToneSelect">
+                  <option value="professional" selected>Professional</option>
+                  <option value="friendly">Friendly & Casual</option>
+                  <option value="persuasive">Persuasive / Sales-oriented</option>
+                  <option value="direct">Direct & Concise</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Language</label>
+                <select id="aiLangSelect">
+                  <option value="English" selected>English</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="French">French</option>
+                  <option value="Tamil">Tamil</option>
+                  <option value="Hindi">Hindi</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Custom Prompt / Instructions</label>
+                <textarea id="aiCustomPromptInput" placeholder="e.g. Mention they got a bad review on maps last week." rows="4"></textarea>
+              </div>
+              <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+                <h4 style="margin-top: 0; color: var(--accent);">⚡ Bulk AI Operations</h4>
+                <p class="muted" style="font-size: 0.8rem; margin-bottom: 12px; line-height: 1.3;">
+                  Processes all leads using Gemini sequentially with a 4-second delay per lead (to satisfy Free Tier limits).
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <button class="secondary" type="button" id="btnBulkScore" style="width: 100%; border-color: var(--accent); color: var(--accent); margin:0;">Score All Leads</button>
+                  <button class="secondary" type="button" id="btnBulkEmails" style="width: 100%; border-color: var(--accent); color: var(--accent); margin:0;">Draft Emails for All</button>
+                </div>
+                <div id="bulkStatusText" class="muted" style="display: none; margin-top: 12px; font-size: 0.8rem; font-family: monospace; padding: 8px; background: #020617; border-radius: 4px; border: 1px solid var(--border); white-space: pre-wrap; line-height: 1.4;"></div>
+              </div>
+            </section>
+
+            <!-- Right panel: Interactive AI Tabs -->
+            <section class="card">
+              <div class="toolbar" style="margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; gap: 10px; overflow-x: auto; white-space: nowrap;">
+                <button class="tab-btn active" data-ai-tab="email">Email</button>
+                <button class="tab-btn" data-ai-tab="whatsapp">WhatsApp</button>
+                <button class="tab-btn" data-ai-tab="call-script">Call Script</button>
+                <button class="tab-btn" data-ai-tab="followup">Follow-up</button>
+                <button class="tab-btn" data-ai-tab="proposal">Proposal</button>
+                <button class="tab-btn" data-ai-tab="audit">Website Audit</button>
+                <button class="tab-btn" data-ai-tab="seo">SEO Audit</button>
+                <button class="tab-btn" data-ai-tab="score">Lead Score</button>
+                <button class="tab-btn" data-ai-tab="prep">Meeting Prep</button>
+                <button class="tab-btn" data-ai-tab="reply">Reply Assistant</button>
+              </div>
+
+              <!-- AI TAB CONTENT: EMAIL -->
+              <div id="ai-tab-email" class="ai-tab-view">
+                <h4>Email Outreach Pitch</h4>
+                <div class="form-group">
+                  <label>Subject</label>
+                  <input type="text" id="aiEmailSubject" style="width: 100%;" readonly />
+                </div>
+                <div class="form-group">
+                  <label>Body</label>
+                  <textarea id="aiEmailBody" rows="10" style="width: 100%; font-family: monospace;"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Call to Action</label>
+                  <input type="text" id="aiEmailCTA" style="width: 100%;" readonly />
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_email">Generate</button>
+                  <button class="secondary" id="btnAiRegenerate_email" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_email" style="display:none;">Copy</button>
+                  <button class="secondary" id="btnAiSave_email" style="display:none;">Save to CRM</button>
+                </div>
+                <div id="aiEmailLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: WHATSAPP -->
+              <div id="ai-tab-whatsapp" class="ai-tab-view hidden">
+                <h4>WhatsApp Message</h4>
+                <div class="form-group">
+                  <label>Message</label>
+                  <textarea id="aiWhatsappMessage" rows="6" style="width: 100%; font-family: monospace;"></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_whatsapp">Generate</button>
+                  <button class="secondary" id="btnAiRegenerate_whatsapp" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_whatsapp" style="display:none;">Copy</button>
+                  <button class="secondary" id="btnAiSave_whatsapp" style="display:none;">Save to CRM</button>
+                </div>
+                <div id="aiWhatsappLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: CALL SCRIPT -->
+              <div id="ai-tab-call-script" class="ai-tab-view hidden">
+                <h4>Interactive Cold Call Script</h4>
+                <p class="muted" style="font-size: 0.85rem; margin-bottom: 10px;">Tailored elevator pitch, introduction, conversation flow, objection handling, and closing scripts.</p>
+                <div class="form-group">
+                  <textarea id="aiCallScriptText" rows="12" style="width: 100%; font-family: monospace;" readonly placeholder="Your call script will be generated here..."></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_call-script">Generate Script</button>
+                  <button class="secondary" id="btnAiRegenerate_call-script" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_call-script" style="display:none;">Copy</button>
+                </div>
+                <div id="aiCallScriptLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: FOLLOW-UP -->
+              <div id="ai-tab-followup" class="ai-tab-view hidden">
+                <h4>Follow-up Email Sequences</h4>
+                <p class="muted" style="font-size: 0.85rem; margin-bottom: 10px;">A sequence of three follow-up email templates for persistent outreach.</p>
+                <div class="form-group">
+                  <label>First Follow-up (3-5 days)</label>
+                  <textarea id="aiFollowupFirst" rows="4" style="width: 100%; font-family: monospace; margin-bottom: 10px;" readonly></textarea>
+                  
+                  <label>Second Follow-up (7-10 days)</label>
+                  <textarea id="aiFollowupSecond" rows="4" style="width: 100%; font-family: monospace; margin-bottom: 10px;" readonly></textarea>
+
+                  <label>Final Follow-up (Break-up email)</label>
+                  <textarea id="aiFollowupFinal" rows="4" style="width: 100%; font-family: monospace;" readonly></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_followup">Generate Sequence</button>
+                  <button class="secondary" id="btnAiRegenerate_followup" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_followup" style="display:none;">Copy All</button>
+                </div>
+                <div id="aiFollowupLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: PROPOSAL -->
+              <div id="ai-tab-proposal" class="ai-tab-view hidden">
+                <h4>Business Proposal (Markdown)</h4>
+                <div class="form-group">
+                  <textarea id="aiProposalMarkdown" rows="15" style="width: 100%; font-family: monospace;"></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_proposal">Generate</button>
+                  <button class="secondary" id="btnAiRegenerate_proposal" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_proposal" style="display:none;">Copy</button>
+                  <button class="secondary" id="btnAiSave_proposal" style="display:none;">Save to CRM</button>
+                </div>
+                <div id="aiProposalLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: WEBSITE AUDIT -->
+              <div id="ai-tab-audit" class="ai-tab-view hidden">
+                <h4>Website Audit & Recommendations</h4>
+                <div class="form-group">
+                  <label>Audit Details</label>
+                  <textarea id="aiAuditDetails" rows="10" style="width: 100%; font-family: monospace;" readonly></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_audit">Generate</button>
+                  <button class="secondary" id="btnAiRegenerate_audit" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_audit" style="display:none;">Copy</button>
+                  <button class="secondary" id="btnAiSave_audit" style="display:none;">Save to CRM</button>
+                </div>
+                <div id="aiAuditLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: SEO AUDIT -->
+              <div id="ai-tab-seo" class="ai-tab-view hidden">
+                <h4>Search Engine Optimization (SEO) Audit</h4>
+                <p class="muted" style="font-size: 0.85rem; margin-bottom: 10px;">Tailored keyword suggestions, title tags, meta descriptions, and content optimizations for the lead.</p>
+                <div class="form-group">
+                  <textarea id="aiSeoDetails" rows="12" style="width: 100%; font-family: monospace;" readonly placeholder="SEO recommendations will be generated here..."></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_seo">Generate SEO Audit</button>
+                  <button class="secondary" id="btnAiRegenerate_seo" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_seo" style="display:none;">Copy</button>
+                </div>
+                <div id="aiSeoLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: LEAD SCORE -->
+              <div id="ai-tab-score" class="ai-tab-view hidden">
+                <h4>Gemini CRM Lead Score</h4>
+                <div class="grid" style="grid-template-columns: 1fr 2fr; gap: 15px; margin-bottom: 15px;">
+                  <div class="card" style="text-align: center; justify-content: center; display: flex; flex-direction: column;">
+                    <div class="muted">AI Score</div>
+                    <h1 id="aiScoreValue">-</h1>
+                  </div>
+                  <div class="card">
+                    <p><strong>Priority:</strong> <span id="aiScorePriority">-</span></p>
+                    <p><strong>Confidence:</strong> <span id="aiScoreConfidence">-</span></p>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Reasoning, Strengths & Weaknesses</label>
+                  <textarea id="aiScoreReasoning" rows="8" style="width: 100%; font-family: monospace;" readonly></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_score">Generate</button>
+                  <button class="secondary" id="btnAiRegenerate_score" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_score" style="display:none;">Copy</button>
+                  <button class="secondary" id="btnAiSave_score" style="display:none;">Save to CRM</button>
+                </div>
+                <div id="aiScoreLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: MEETING PREP -->
+              <div id="ai-tab-prep" class="ai-tab-view hidden">
+                <h4>Meeting Preparation Brief</h4>
+                <div class="form-group">
+                  <textarea id="aiPrepDetails" rows="12" style="width: 100%; font-family: monospace;" readonly></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_prep">Generate</button>
+                  <button class="secondary" id="btnAiRegenerate_prep" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_prep" style="display:none;">Copy</button>
+                  <button class="secondary" id="btnAiSave_prep" style="display:none;">Save to CRM</button>
+                </div>
+                <div id="aiPrepLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+              <!-- AI TAB CONTENT: REPLY ASSISTANT -->
+              <div id="ai-tab-reply" class="ai-tab-view hidden">
+                <h4>Reply Assistant</h4>
+                <div class="form-group">
+                  <label>Objection or Incoming message to reply to</label>
+                  <textarea id="aiReplyInput" rows="4" placeholder="Enter what the customer said..."></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Select Reply Type</label>
+                  <select id="aiReplyType">
+                    <option value="email-reply">General Email Reply</option>
+                    <option value="objection-reply">Objection Handling Response</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Generated Professional Response</label>
+                  <textarea id="aiReplyOutput" rows="6" style="width: 100%; font-family: monospace;"></textarea>
+                </div>
+                <div class="ai-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                  <button class="primary" id="btnAiGenerate_reply">Generate</button>
+                  <button class="secondary" id="btnAiRegenerate_reply" style="display:none;">Regenerate</button>
+                  <button class="secondary" id="btnAiCopy_reply" style="display:none;">Copy</button>
+                  <button class="secondary" id="btnAiSave_reply" style="display:none;">Save to CRM</button>
+                </div>
+                <div id="aiReplyLoading" class="muted" style="display:none; margin-top: 10px;">Generating... Please wait.</div>
+              </div>
+
+            </section>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SETTINGS TAB -->
+        <!-- ========================================== -->
+        <div id="tab-settings" class="tab-view hidden">
+          <section class="card">
+            <h3>Scoring Rules Config</h3>
+            <form id="settingsScoringForm">
+              <div class="form-group">
+                <label>Score for Missing Website</label>
+                <input type="number" name="noWebsite" required />
+              </div>
+              <div class="form-group">
+                <label>Score for Missing Contact Info</label>
+                <input type="number" name="missingContact" required />
+              </div>
+              <div class="form-group">
+                <label>Score for Public Contact Present</label>
+                <input type="number" name="publicContact" required />
+              </div>
+              <div class="form-group">
+                <label>Score for Validated Contact</label>
+                <input type="number" name="contactValid" required />
+              </div>
+              <button class="primary" type="submit">Save Rules</button>
+            </form>
+          </section>
+          <section class="card">
+            <h3>General Settings</h3>
+            <form id="settingsGeneralForm">
+              <div class="form-group">
+                <label>Daily Contact Limit</label>
+                <input type="number" name="daily_contact_limit" required />
+              </div>
+              <div class="form-group">
+                <label>Follow Up Interval (Days)</label>
+                <input type="number" name="follow_up_interval_days" required />
+              </div>
+              <div class="form-group">
+                <label>Max Follow Up Retries</label>
+                <input type="number" name="max_follow_ups" required />
+              </div>
+              <div class="form-group">
+                <label>Minimum Acceptable Price ($)</label>
+                <input type="number" name="minimum_acceptable_price" required />
+              </div>
+              <div class="form-group">
+                <label>Gemini API Key (Free Tier)</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="password" name="gemini_api_key" id="geminiApiKeyInput" placeholder="Enter Gemini API Key" style="flex: 1;" />
+                  <button class="secondary" type="button" id="btnToggleGeminiVisibility" style="padding: 0 12px; margin: 0;">Show</button>
+                </div>
+              </div>
+              <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="primary" type="submit" style="flex: 1;">Save Settings</button>
+                <button class="secondary" type="button" id="btnTestGeminiConnection" style="flex: 1; margin: 0;">Test Connection</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+      </main>
+    </div>
+
+    <script>
+      let leadStages = [];
+      let currentLeads = [];
+      let selectedLead = null;
+      let activeTab = 'dashboard';
+      let selectedProjectId = null;
+
+      // -------------------------------------------------------------
+      // NAVIGATION SWITCHING
+      // -------------------------------------------------------------
+      const titles = {
+        dashboard: 'Agency operations dashboard',
+        leads: 'Lead management',
+        pipeline: 'Lead pipeline boards',
+        outreach: 'Campaign outreach panel',
+        'email-approvals': 'Email & Outreach Approvals',
+        autopilot: 'E2E Campaign Autopilot',
+        inbox: 'Inbox messages & conversations',
+        meetings: 'Escalation & meetings scheduler',
+        projects: 'Client delivery projects',
+        approvals: 'Discount & Quotation approvals',
+        payments: 'Revenue & payments tracker',
+        reports: 'Analytical summaries',
+        notifications: 'Alert feed',
+        settings: 'Configuration parameters'
+      };
+
+      const descs = {
+        dashboard: 'A stable local-first foundation for manual lead, outreach, and project management.',
+        leads: 'Register new prospects, run Places API search queries, view analytics profiles.',
+        pipeline: 'Visual overview of lead stages and pipeline status.',
+        outreach: 'Configure templates and manage outbound drafting & dispatch limits.',
+        'email-approvals': 'Review generated email drafts before sending to leads.',
+        autopilot: 'Launch end-to-end campaigns from discovery to cold email dispatch.',
+        inbox: 'View historical inbound communications and replies.',
+        meetings: 'Book calendar appointments and escalate complex requirement negotiations.',
+        projects: 'Initialize won accounts, allocate sprint task logs, manage client demo revisions.',
+        approvals: 'Review protected quotations and decisions below base prices.',
+        payments: 'Log deposit amounts and track pending client receivables.',
+        reports: 'Track conversion metrics and historical performance indicators.',
+        notifications: 'Ongoing updates of reply detections, follow-ups, and pending reviews.',
+        settings: 'Modify qualification rules, scoring parameters, and operations variables.'
+      };
+
+      document.querySelectorAll('#sidebarNav button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#sidebarNav button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          
+          document.querySelectorAll('.tab-view').forEach(view => view.classList.add('hidden'));
+          activeTab = btn.dataset.tab;
+          document.getElementById(`tab-${activeTab}`).classList.remove('hidden');
+          
+          document.getElementById('viewTitle').textContent = titles[activeTab];
+          document.getElementById('viewDescription').textContent = descs[activeTab];
+          
+          onTabChanged(activeTab);
+        });
+      });
+
+      function onTabChanged(tab) {
+        if (tab === 'dashboard') loadDashboard();
+        if (tab === 'leads') { loadLeads(); loadDiscoveryDropdowns(); }
+        if (tab === 'pipeline') loadPipelineBoard();
+        if (tab === 'outreach') loadOutreachTab();
+        if (tab === 'email-approvals') loadEmailApprovalsTab();
+        if (tab === 'autopilot') loadAutopilotTab();
+        if (tab === 'inbox') loadInboxTab();
+        if (tab === 'meetings') loadMeetingsTab();
+        if (tab === 'projects') loadProjectsTab();
+        if (tab === 'approvals') loadApprovalsTab();
+        if (tab === 'payments') loadPaymentsTab();
+        if (tab === 'reports') loadReportsTab();
+        if (tab === 'notifications') loadNotificationsTab();
+        if (tab === 'settings') loadSettingsTab();
+      }
+
+      // -------------------------------------------------------------
+      // CORE DASHBOARD & LEADS (EXISTING LOGIC EXPANDED)
+      // -------------------------------------------------------------
+      async function fetchLeadStages() {
+        const result = await fetch('/api/lead-stages').then(r => r.json());
+        leadStages = result;
+        const stageFilter = document.getElementById('stageFilter');
+        stageFilter.innerHTML = '<option value="">All stages</option>' + leadStages.map(stage => `<option value="${stage}">${stage}</option>`).join('');
+      }
+
+      async function loadDashboard() {
+        const stats = await fetch('/api/dashboard').then(r => r.json());
+        const activity = await fetch('/api/activity').then(r => r.json());
+        const integrations = await fetch('/api/integrations/status').then(r => r.json());
+        
+        document.getElementById('stats').innerHTML = [
+          ['Total leads', stats.totalLeads],
+          ['New leads', stats.newLeads],
+          ['Qualified leads', stats.qualifiedLeads],
+          ['Active projects', stats.activeProjects],
+          ['Won deals', stats.wonDeals],
+          ['Total Revenue', `$${stats.revenue}`]
+        ].map(([label, value]) => `<div class="card"><div class="muted">${label}</div><h2>${value}</h2></div>`).join('');
+        
+        document.getElementById('activity').innerHTML = activity.slice(0, 8).map(item => `
+          <div class="row">
+            <div class="pill ${item.action.includes('deleted') ? 'pill-danger' : (item.action.includes('won') || item.action.includes('qualified') ? 'pill-success' : '')}">${item.action}</div>
+            <div>${item.description}</div>
+          </div>
+        `).join('') || '<div class="muted">No recent activities.</div>';
+
+        document.getElementById('integrationsList').innerHTML = Object.entries(integrations).map(([name, data]) => `
+          <div class="row">
+            <div><strong>${name.replace('_', ' ').toUpperCase()}</strong></div>
+            <div class="pill ${data.status === 'CONNECTED' || data.status === 'CONFIGURED' || data.status === 'EXTERNALLY_CONNECTED' ? 'pill-success' : 'pill-warning'}">${data.status}</div>
+          </div>
+        `).join('');
+      }
+
+      async function loadLeads() {
+        const search = document.getElementById('searchInput').value.trim();
+        const stage = document.getElementById('stageFilter').value;
+        const params = new URLSearchParams();
+        if (search) params.set('search', search);
+        if (stage) params.set('stage', stage);
+        const url = `/api/leads?${params.toString()}`;
+        const result = await fetch(url).then(r => r.json());
+        currentLeads = result.leads;
+        if (document.getElementById('noWebsiteFilter').checked) {
+          currentLeads = currentLeads.filter(lead => !lead.public_website || lead.public_website.trim() === '');
+        }
+        
+        const rows = currentLeads.map(lead => `
+          <tr data-id="${lead.id}">
+            <td>${lead.business_name}</td>
+            <td>${lead.category || ''}</td>
+            <td>${lead.location || ''}</td>
+            <td>${lead.stage}</td>
+            <td><span class="pill ${lead.score > 70 ? 'pill-success' : (lead.score > 40 ? 'pill-warning' : '')}">${lead.score}</span></td>
+          </tr>
+        `).join('');
+        
+        document.getElementById('leadTable').innerHTML = `
+          <thead><tr><th>Business</th><th>Category</th><th>Location</th><th>Stage</th><th>Score</th></tr></thead>
+          <tbody>${rows}</tbody>
+        `;
+        
+        document.querySelectorAll('#leadTable tbody tr').forEach(row => {
+          row.addEventListener('click', () => { selectLead(row.dataset.id); });
+        });
+        
+        if (currentLeads.length === 0) {
+          document.getElementById('leadTable').innerHTML = '<tr><td colspan="5" class="muted" style="padding: 20px; text-align: center;">No leads found</td></tr>';
+        }
+      }
+
+      function renderLeadDetail(lead) {
+        const detailEl = document.getElementById('leadDetail');
+        if (!lead) {
+          detailEl.innerHTML = '<div class="muted">Select a lead to view details.</div>';
+          return;
+        }
+        detailEl.innerHTML = `
+          <div class="card" style="margin-bottom: 15px;">
+            <h3>${lead.business_name}</h3>
+            <p class="muted">${lead.category || 'No category'} • ${lead.location || 'No location'}</p>
+            <p><strong>Stage:</strong> ${lead.stage}</p>
+            <p><strong>Score:</strong> ${lead.score}</p>
+            <p><strong>Priority:</strong> ${lead.priority}</p>
+            <p><strong>Qualification:</strong> ${lead.qualification_reason || 'Awaiting review'}</p>
+            <p><strong>Email:</strong> ${lead.public_email || 'N/A'}</p>
+            <p><strong>Phone:</strong> ${lead.public_phone || 'N/A'}</p>
+            <p><strong>Source:</strong> ${lead.source || 'N/A'}</p>
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+              <button class="primary" id="analyzeWebsiteButton">Analyze website</button>
+              <button class="primary" id="qualifyLeadButton">Mark as qualified</button>
+              <button class="danger" id="deleteLeadButton">Delete Lead</button>
+              <button class="secondary" id="escalateLeadButton">Escalate for Meeting</button>
+            </div>
+          </div>
+          ${lead.website_analysis ? `
+            <div class="card" style="margin-bottom: 15px;">
+              <h4>Website analysis</h4>
+              <p><strong>URL checked:</strong> ${lead.website_analysis.checked_url || 'N/A'}</p>
+              <p><strong>Accessible:</strong> ${lead.website_analysis.accessible ? 'Yes' : 'No'}</p>
+              <p><strong>HTTPS:</strong> ${lead.website_analysis.https_available ? 'Yes' : 'No'}</p>
+              <p><strong>Mobile friendly:</strong> ${lead.website_analysis.mobile_friendly ? 'Yes' : 'No'}</p>
+              <p><strong>Contact details present:</strong> ${lead.website_analysis.contact_present ? 'Yes' : 'No'}</p>
+              <p><strong>Booking/order features:</strong> ${lead.website_analysis.booking_ordering_present ? 'Yes' : 'No'}</p>
+              <p><strong>Opportunity:</strong> ${lead.website_analysis.improvement_opportunity || 'N/A'}</p>
+            </div>
+          ` : ''}
+          <div class="card" style="margin-bottom: 15px; background: linear-gradient(145deg, #1e1b4b, #0f172a); border: 1px solid #312e81; color: white;">
+            <h4 style="margin-top:0; color: #a5b4fc;">✨ AI Sales Assistant Actions</h4>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+              <button class="primary" style="background:#4f46e5; border:none;" onclick="triggerLeadAI('email', '${lead.id}')">Generate Email</button>
+              <button class="primary" style="background:#4f46e5; border:none;" onclick="triggerLeadAI('whatsapp', '${lead.id}')">Generate WhatsApp</button>
+              <button class="primary" style="background:#4f46e5; border:none;" onclick="triggerLeadAI('proposal', '${lead.id}')">Generate Proposal</button>
+              <button class="primary" style="background:#0284c7; border:none;" onclick="triggerLeadAI('audit', '${lead.id}')">Analyze Website</button>
+              <button class="primary" style="background:#0284c7; border:none;" onclick="triggerLeadAI('pitch', '${lead.id}')">Generate Pitch</button>
+              <button class="primary" style="background:#10b981; border:none;" onclick="triggerLeadAI('score', '${lead.id}')">Score Lead</button>
+              <button class="primary" style="background:#10b981; border:none;" onclick="triggerLeadAI('prep', '${lead.id}')">Meeting Prep</button>
+              <button class="primary" style="background:#d97706; border:none;" onclick="triggerLeadAI('reply-assistant', '${lead.id}')">Reply Assistant</button>
+              <button class="primary" style="background:#d97706; border:none;" onclick="triggerLeadAI('tags', '${lead.id}')">Generate Tags</button>
+              <button class="primary" style="background:#7c3aed; border:none;" onclick="triggerLeadAI('next-action', '${lead.id}')">Next Best Action</button>
+            </div>
+            <div id="leadAiOutputBox" class="muted" style="display:none; padding:12px; background:#020617; border-radius:6px; border:1px solid #1e293b; color:#e2e8f0; font-family:monospace; white-space:pre-wrap; max-height: 250px; overflow-y: auto;">
+            </div>
+          </div>
+          <div class="card">
+            <h4>Update lead</h4>
+            <form id="editLeadForm">
+              <select name="stage">
+                ${leadStages.map(stage => `<option value="${stage}" ${stage === lead.stage ? 'selected' : ''}>${stage}</option>`).join('')}
+              </select>
+              <input name="publicEmail" placeholder="Email" value="${lead.public_email || ''}" />
+              <input name="publicPhone" placeholder="Phone" value="${lead.public_phone || ''}" />
+              <input name="preferred_contact_method" placeholder="Preferred contact" value="${lead.preferred_contact_method || ''}" />
+              <select name="contact_validity">
+                <option value="UNKNOWN" ${lead.contact_validity === 'UNKNOWN' ? 'selected' : ''}>Unknown</option>
+                <option value="VALID" ${lead.contact_validity === 'VALID' ? 'selected' : ''}>Valid</option>
+                <option value="INVALID" ${lead.contact_validity === 'INVALID' ? 'selected' : ''}>Invalid</option>
+              </select>
+              <button class="primary" type="submit">Save changes</button>
+            </form>
+          </div>
+        `;
+
+        document.getElementById('editLeadForm').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const payload = Object.fromEntries(new FormData(e.target).entries());
+          const response = await fetch(`/api/leads/${lead.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (response.ok) {
+            loadLeads();
+            const updated = await response.json();
+            renderLeadDetail(updated.lead);
+          }
+        });
+
+        document.getElementById('analyzeWebsiteButton').addEventListener('click', async () => {
+          const response = await fetch(`/api/leads/${lead.id}/analyze`, { method: 'POST' });
+          if (response.ok) {
+            const result = await response.json();
+            loadLeads();
+            renderLeadDetail(result.lead);
+          }
+        });
+
+        document.getElementById('qualifyLeadButton').addEventListener('click', async () => {
+          const response = await fetch(`/api/leads/${lead.id}/qualify`, { method: 'POST' });
+          if (response.ok) {
+            const result = await response.json();
+            loadLeads();
+            renderLeadDetail(result.lead);
+          }
+        });
+
+        document.getElementById('deleteLeadButton').addEventListener('click', async () => {
+          if (confirm('Delete this lead?')) {
+            const response = await fetch(`/api/leads/${lead.id}`, { method: 'DELETE' });
+            if (response.ok) {
+              selectedLead = null;
+              loadLeads();
+              renderLeadDetail(null);
+            }
+          }
+        });
+
+        document.getElementById('escalateLeadButton').addEventListener('click', async () => {
+          const response = await fetch(`/api/leads/${lead.id}/escalate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'unclear_requirements' })
+          });
+          if (response.ok) {
+            alert('Lead escalated for meeting required!');
+            loadLeads();
+            const response2 = await fetch(`/api/leads/${lead.id}`).then(r => r.json());
+            renderLeadDetail(response2);
+          }
+        });
+      }
+
+      function selectLead(id) {
+        selectedLead = currentLeads.find(l => l.id === id);
+        renderLeadDetail(selectedLead);
+      }
+
+      document.getElementById('leadForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const response = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadLeads();
+        } else {
+          const err = await response.json();
+          alert(err.error || 'Failed to create lead');
+        }
+      });
+
+      document.getElementById('searchInput').addEventListener('input', loadLeads);
+      document.getElementById('stageFilter').addEventListener('change', loadLeads);
+      document.getElementById('noWebsiteFilter').addEventListener('change', loadLeads);
+
+      // LEAD DISCOVERY
+      document.getElementById('discoverForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const resultsEl = document.getElementById('discoveryResults');
+        resultsEl.innerHTML = '<div class="muted">Searching...</div>';
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const response = await fetch('/api/discover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (result.success) {
+          let discoveryResults = result.results || [];
+          if (e.target.noWebsiteSearch.checked) {
+            discoveryResults = discoveryResults.filter(res => !res.public_website || res.public_website.trim() === '');
+          }
+
+          if (discoveryResults.length > 0) {
+            resultsEl.innerHTML = discoveryResults.map((res, i) => `
+              <div class="row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; width: 100%;">
+                  <strong>${res.business_name}</strong>
+                  <span class="pill">${res.category}</span>
+                </div>
+                <div class="muted">${res.location}</div>
+                <div style="font-size: 0.85rem; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap;">
+                  ${res.rating ? `<span>Rating: ★${res.rating}</span>` : ''}
+                  ${res.public_phone ? `<span>Phone: ${res.public_phone}</span>` : ''}
+                  ${res.public_website ? `<span>Website: <a href="${res.public_website}" target="_blank" style="color:var(--accent);">${res.public_website}</a></span>` : ''}
+                  ${res.google_maps_url ? `<span><a href="${res.google_maps_url}" target="_blank" style="color:var(--accent-2);">Maps Link</a></span>` : ''}
+                </div>
+                <button class="primary" style="margin-top: 5px; width: 100%;" onclick="addDiscoveredLead(${i})">Add Lead</button>
+              </div>
+            `).join('');
+            window.lastDiscoveryResults = discoveryResults;
+          } else {
+            resultsEl.innerHTML = '<div class="muted">No leads without websites found in these results. Try increasing the result limit.</div>';
+          }
+        } else {
+          resultsEl.innerHTML = `<div class="muted">${result.error || 'No results found. (Provider Status: ' + result.provider_status + ')'}</div>`;
+        }
+      });
+
+      async function addDiscoveredLead(index) {
+        const item = window.lastDiscoveryResults[index];
+        const response = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName: item.business_name,
+            category: item.category,
+            location: item.location,
+            publicWebsite: item.public_website || '',
+            publicPhone: item.public_phone || '',
+            source: 'Discovery API'
+          })
+        });
+        if (response.ok) {
+          alert('Lead imported successfully!');
+          loadLeads();
+        } else {
+          const err = await response.json();
+          alert(err.error || 'Failed to import lead');
+        }
+      }
+
+      async function loadDiscoveryDropdowns() {
+        const leads = await fetch('/api/leads').then(r => r.json());
+        const dropdowns = ['outreachLeadSelect', 'replyLeadSelect', 'meetingLeadSelect', 'projectLeadSelect', 'paymentLeadSelect', 'aiLeadSelect'];
+        dropdowns.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.innerHTML = '<option value="">Select a Lead</option>' + leads.leads.map(l => `<option value="${l.id}">${l.business_name}</option>`).join('');
+          }
+        });
+      }
+
+      // -------------------------------------------------------------
+      // PIPELINE BOARD TAB
+      // -------------------------------------------------------------
+      async function loadPipelineBoard() {
+        const boardEl = document.getElementById('kanbanBoard');
+        boardEl.innerHTML = '<div class="muted">Loading board...</div>';
+        const leadsRes = await fetch('/api/leads').then(r => r.json());
+        const leads = leadsRes.leads;
+        
+        const keyStages = ['NEW', 'ANALYZED', 'QUALIFIED', 'CONTACTED', 'MEETING_SCHEDULED', 'WON', 'LOST'];
+        boardEl.innerHTML = keyStages.map(stage => {
+          const stageLeads = leads.filter(l => l.stage === stage);
+          const cardsHtml = stageLeads.map(l => `
+            <div class="kanban-card" onclick="openLeadFromKanban('${l.id}')">
+              <h5>${l.business_name}</h5>
+              <p>Score: ${l.score} • Priority: ${l.priority}</p>
+            </div>
+          `).join('');
+          return `
+            <div class="kanban-column">
+              <h4><span>${stage}</span> <span class="pill">${stageLeads.length}</span></h4>
+              ${cardsHtml || '<div class="muted" style="text-align:center; padding: 20px;">Empty</div>'}
+            </div>
+          `;
+        }).join('');
+      }
+
+      function openLeadFromKanban(leadId) {
+        document.querySelector('[data-tab="leads"]').click();
+        setTimeout(() => selectLead(leadId), 100);
+      }
+
+      // -------------------------------------------------------------
+      // OUTREACH TAB
+      // -------------------------------------------------------------
+      async function loadOutreachTab() {
+        loadDiscoveryDropdowns();
+        const templatesList = document.getElementById('templatesList');
+        const templates = await fetch('/api/outreach/templates').then(r => r.json());
+        templatesList.innerHTML = templates.map(t => `
+          <div class="row">
+            <div>
+              <strong>${t.name}</strong> [${t.channel}]
+              <div class="muted">${t.body.substring(0, 60)}...</div>
+            </div>
+          </div>
+        `).join('') || '<div class="muted">No templates.</div>';
+
+        const templateSelect = document.getElementById('outreachTemplateSelect');
+        templateSelect.innerHTML = '<option value="">Select a Template (Optional)</option>' + templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+        const queueEl = document.getElementById('outreachQueueList');
+        const messages = await fetch('/api/outreach/messages').then(r => r.json());
+        queueEl.innerHTML = messages.map(m => `
+          <div class="row">
+            <div>
+              <strong>Channel:</strong> ${m.channel} | <strong>Status:</strong> ${m.status}
+              <div class="muted">${m.body.substring(0, 100)}</div>
+            </div>
+            <div>
+              ${m.status === 'DRAFT' ? `<button class="primary" onclick="approveMessage('${m.id}')">Approve</button>` : ''}
+              ${m.status === 'QUEUED' ? `<button class="primary" onclick="sendMessage('${m.id}')">Send</button>` : ''}
+            </div>
+          </div>
+        `).join('') || '<div class="muted">Queue is empty.</div>';
+      }
+
+      document.getElementById('templateForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const response = await fetch('/api/outreach/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadOutreachTab();
+        }
+      });
+
+      document.getElementById('outreachMsgForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const lead_id = form.elements.lead_id.value;
+        const template_id = form.elements.template_id.value || null;
+        const channel = form.elements.channel.value;
+        
+        let subject = '';
+        let body = '';
+        if (channel === 'email') {
+          subject = form.elements.subject.value;
+          body = form.elements.body.value;
+        } else if (channel === 'whatsapp') {
+          subject = 'WhatsApp Message';
+          body = document.getElementById('outreachWhatsappTextarea').value;
+        } else if (channel === 'proposal') {
+          subject = 'Business Proposal';
+          body = document.getElementById('outreachProposalTextarea').value;
+        }
+        
+        const response = await fetch('/api/outreach/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lead_id, template_id, channel, subject, body })
+        });
+        if (response.ok) {
+          form.reset();
+          // Reset hidden states
+          document.getElementById('outreachEmailGroup').classList.remove('hidden');
+          document.getElementById('outreachWhatsappGroup').classList.add('hidden');
+          document.getElementById('outreachProposalGroup').classList.add('hidden');
+          document.getElementById('outreachBodyTextarea').required = true;
+          document.getElementById('outreachWhatsappTextarea').required = false;
+          document.getElementById('outreachProposalTextarea').required = false;
+          loadOutreachTab();
+        } else {
+          const err = await response.json();
+          alert(err.error || 'Failed to create draft message');
+        }
+      });
+
+      async function approveMessage(id) {
+        await fetch(`/api/outreach/messages/${id}/approve`, { method: 'PUT' });
+        loadOutreachTab();
+      }
+
+      async function sendMessage(id) {
+        try {
+          const messages = await fetch('/api/outreach/messages').then(r => r.json());
+          const msg = messages.find(m => m.id === id);
+          
+          if (msg && msg.channel === 'whatsapp') {
+            const lead = await fetch(`/api/leads/${msg.lead_id}`).then(r => r.json());
+            const phone = lead ? (lead.whatsapp || lead.public_phone) : '';
+            
+            if (phone) {
+              const cleanPhone = phone.replace(/\D/g, '');
+              const encodedText = encodeURIComponent(msg.body);
+              const waUrl = `https://wa.me/${cleanPhone}?text=${encodedText}`;
+              window.open(waUrl, '_blank');
+            } else {
+              alert('This lead does not have a phone or WhatsApp number configured.');
+            }
+          }
+        } catch (err) {
+          console.error('Failed to process WhatsApp redirection:', err);
+        }
+
+        await fetch(`/api/outreach/messages/${id}/send`, { method: 'PUT' });
+        loadOutreachTab();
+      }
+
+      async function loadEmailApprovalsTab() {
+        const listEl = document.getElementById('emailApprovalsList');
+        listEl.innerHTML = '<div class="muted">Loading drafts...</div>';
+        
+        try {
+          const [messages, leadsRes] = await Promise.all([
+            fetch('/api/outreach/messages').then(r => r.json()),
+            fetch('/api/leads?limit=200').then(r => r.json())
+          ]);
+          
+          const leads = leadsRes.leads || [];
+          const drafts = messages.filter(m => m.status === 'DRAFT' || m.status === 'FAILED' || m.status === 'QUEUED');
+          
+          if (drafts.length === 0) {
+            listEl.innerHTML = '<div class="muted">No pending drafts to approve. All drafts are processed!</div>';
+            return;
+          }
+          
+          listEl.innerHTML = drafts.map(m => {
+            const lead = leads.find(l => l.id === m.lead_id) || {};
+            const businessName = lead.business_name || 'Unknown Business';
+            const toEmail = lead.public_email || 'No public email';
+            
+            const statusPill = m.status === 'FAILED'
+              ? `<span class="pill pill-danger">SEND FAILED</span>`
+              : (m.status === 'QUEUED'
+                 ? `<span class="pill pill-warning" style="background-color: var(--primary); color: white;">QUEUED (UNSENT)</span>`
+                 : `<span class="pill pill-warning">PENDING APPROVAL</span>`);
+              
+            const errorAlert = m.status === 'FAILED' && m.error
+              ? `<div style="font-size: 0.9rem; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                   <strong>Error:</strong> ${m.error}
+                 </div>`
+              : '';
+
+            const buttons = m.status === 'FAILED' || m.status === 'QUEUED'
+              ? `<button class="primary" style="margin: 0;" onclick="approveAndSendMessageInTab('${m.id}')">${m.status === 'FAILED' ? 'Retry Send Now' : 'Send Now'}</button>`
+              : `
+                <button class="secondary" style="margin: 0;" onclick="approveMessageInTab('${m.id}')">Approve Only (Queue)</button>
+                <button class="primary" style="margin: 0;" onclick="approveAndSendMessageInTab('${m.id}')">Approve & Send Now</button>
+              `;
+
+            return `
+              <div class="row" style="flex-direction: column; align-items: stretch; gap: 15px; padding: 20px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                  <div>
+                    <h3 style="margin: 0; font-size: 1.2rem; color: var(--text);">${businessName}</h3>
+                    <span class="muted" style="font-size: 0.85rem;">To: <strong>${toEmail}</strong> | Channel: <strong>${m.channel}</strong></span>
+                  </div>
+                  ${statusPill}
+                </div>
+                
+                ${errorAlert}
+                
+                <div>
+                  <div style="font-size: 0.9rem; margin-bottom: 5px; color: var(--text-muted);"><strong>Subject:</strong> ${m.subject || 'N/A'}</div>
+                  <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 5px;"><strong>Body:</strong></div>
+                  <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9rem; background: var(--bg-dark); padding: 15px; border-radius: 6px; border: 1px solid var(--border); margin: 0; max-height: 300px; overflow-y: auto; color: var(--text);">${m.body}</pre>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px;">
+                  ${buttons}
+                </div>
+              </div>
+            `;
+          }).join('');
+        } catch (err) {
+          listEl.innerHTML = `<div class="danger">Failed to load email approvals: ${err.message}</div>`;
+        }
+      }
+
+      async function approveMessageInTab(id) {
+        try {
+          const res = await fetch(`/api/outreach/messages/${id}/approve`, { method: 'PUT' });
+          if (res.ok) {
+            alert('Draft approved and moved to status queue.');
+            loadEmailApprovalsTab();
+          } else {
+            const err = await res.json();
+            alert('Approval failed: ' + (err.error || 'Unknown error'));
+          }
+        } catch (err) {
+          alert('Approval error: ' + err.message);
+        }
+      }
+
+      async function approveAndSendMessageInTab(id) {
+        try {
+          const messages = await fetch('/api/outreach/messages').then(r => r.json());
+          const msg = messages.find(m => m.id === id);
+          if (!msg) throw new Error('Message not found');
+
+          if (msg.status === 'DRAFT') {
+            // 1. Approve
+            const approveRes = await fetch(`/api/outreach/messages/${id}/approve`, { method: 'PUT' });
+            if (!approveRes.ok) {
+              const err = await approveRes.json();
+              throw new Error(err.error || 'Approval failed');
+            }
+          }
+          
+          // 2. Send
+          const sendRes = await fetch(`/api/outreach/messages/${id}/send`, { method: 'PUT' });
+          const sendData = await sendRes.json();
+          if (!sendRes.ok) {
+            throw new Error(sendData.error || 'Send failed');
+          }
+          
+          let alertMsg = msg.status === 'FAILED' ? 'Email resent successfully!' : 'Draft approved and marked as SENT successfully!';
+          if (sendData.note) {
+            alertMsg += `\n(${sendData.note})`;
+          }
+          alert(alertMsg);
+          loadEmailApprovalsTab();
+        } catch (err) {
+          alert('Error: ' + err.message);
+          loadEmailApprovalsTab();
+        }
+      }
+
+      // Approve & Send All Event Listener
+      document.getElementById('btnApproveAndSendAll').addEventListener('click', async () => {
+        const btn = document.getElementById('btnApproveAndSendAll');
+        const listEl = document.getElementById('emailApprovalsList');
+        
+        try {
+          const messages = await fetch('/api/outreach/messages').then(r => r.json());
+          const drafts = messages.filter(m => m.status === 'DRAFT' || m.status === 'FAILED' || m.status === 'QUEUED');
+          
+          if (drafts.length === 0) {
+            alert('No pending drafts, failed, or queued messages to process.');
+            return;
+          }
+          
+          if (!confirm(`Are you sure you want to Approve & Send all ${drafts.length} pending items? A 4-second delay per email will be applied to prevent API rate limiting.`)) {
+            return;
+          }
+          
+          btn.disabled = true;
+          const originalText = btn.textContent;
+          
+          let successCount = 0;
+          let failedCount = 0;
+          
+          for (let i = 0; i < drafts.length; i++) {
+            const d = drafts[i];
+            btn.textContent = `Processing ${i+1}/${drafts.length}...`;
+            
+            try {
+              if (d.status === 'DRAFT') {
+                // 1. Approve
+                const approveRes = await fetch(`/api/outreach/messages/${d.id}/approve`, { method: 'PUT' });
+                if (!approveRes.ok) throw new Error('Approval failed');
+              }
+              
+              // 2. Send
+              const sendRes = await fetch(`/api/outreach/messages/${d.id}/send`, { method: 'PUT' });
+              if (!sendRes.ok) {
+                const sendData = await sendRes.json();
+                throw new Error(sendData.error || 'Send failed');
+              }
+              successCount++;
+            } catch (err) {
+              console.error(`Approve & Send All failed for message ${d.id}:`, err.message);
+              failedCount++;
+            }
+            
+            if (i < drafts.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 4000));
+            }
+          }
+          
+          btn.disabled = false;
+          btn.textContent = originalText;
+          alert(`Process completed!\nSuccessfully sent: ${successCount} emails\nFailed: ${failedCount} emails`);
+          loadEmailApprovalsTab();
+        } catch (err) {
+          alert('Error executing Approve & Send All: ' + err.message);
+        }
+      });
+
+      // -------------------------------------------------------------
+      // AUTOPILOT TAB
+      // -------------------------------------------------------------
+      function loadAutopilotTab() {
+        // Console ready state
+      }
+
+      document.getElementById('autopilotForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btnLaunchAutopilot');
+        const board = document.getElementById('autopilotStatusBoard');
+        
+        const formData = new FormData(e.target);
+        const limit = Number(formData.get('limit'));
+        const randomize = formData.get('randomize') === 'on';
+
+        if (!confirm(`Are you sure you want to launch E2E Campaign Autopilot for up to ${limit} leads? This will run a multi-stage workflow in real-time with sequential API delays (4s per call) to respect rate limits.`)) {
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Running Autopilot... 🚀';
+        
+        board.innerHTML = '';
+        const log = (msg, isHeader = false) => {
+          const timestamp = new Date().toLocaleTimeString();
+          const p = document.createElement('div');
+          if (isHeader) {
+            p.style.color = '#c084fc';
+            p.style.fontWeight = 'bold';
+            p.style.marginTop = '15px';
+            p.innerHTML = `[${timestamp}] === ${msg} ===`;
+          } else {
+            p.innerHTML = `[${timestamp}] ${msg}`;
+          }
+          board.appendChild(p);
+          board.scrollTop = board.scrollHeight;
+        };
+
+        log('AUTOPILOT CAMPAIGN INITIATED', true);
+        
+        // Curated fallback lists with expanded global English defaults
+        const defaultIndustries = ['Dentists', 'Restaurants', 'Beauty Salons', 'Gyms', 'Plumbers', 'Electricians', 'Builders', 'Pest Control', 'Dry Cleaners', 'Daycares', 'House Painters', 'Car detailing'];
+        const defaultLocations = ['Salem', 'Coimbatore', 'Erode', 'Trichy', 'Madurai', 'Chennai', 'Bangalore'];
+
+        // Timezone mapping for common targeted cities
+        const cityTimezones = {
+          'new york': 'America/New_York', 'boston': 'America/New_York', 'miami': 'America/New_York',
+          'atlanta': 'America/New_York', 'philadelphia': 'America/New_York', 'charlotte': 'America/New_York',
+          'orlando': 'America/New_York', 'washington dc': 'America/New_York', 'washington': 'America/New_York',
+          'columbus': 'America/New_York', 'indianapolis': 'America/New_York', 'detroit': 'America/New_York',
+          'jacksonville': 'America/New_York',
+          'chicago': 'America/Chicago', 'dallas': 'America/Chicago', 'houston': 'America/Chicago',
+          'austin': 'America/Chicago', 'nashville': 'America/Chicago', 'fort worth': 'America/Chicago',
+          'san antonio': 'America/Chicago',
+          'denver': 'America/Denver', 'phoenix': 'America/Phoenix',
+          'seattle': 'America/Los_Angeles', 'los angeles': 'America/Los_Angeles', 'san diego': 'America/Los_Angeles',
+          'san francisco': 'America/Los_Angeles', 'las vegas': 'America/Los_Angeles', 'portland': 'America/Los_Angeles',
+          'san jose': 'America/Los_Angeles',
+          'chennai': 'Asia/Kolkata', 'bangalore': 'Asia/Kolkata', 'coimbatore': 'Asia/Kolkata',
+          'madurai': 'Asia/Kolkata', 'trichy': 'Asia/Kolkata', 'erode': 'Asia/Kolkata', 'salem': 'Asia/Kolkata'
+        };
+
+        function getCityHour(city) {
+          const tz = cityTimezones[city.toLowerCase().trim()] || 'America/New_York';
+          try {
+            const formatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: tz,
+              hour: 'numeric',
+              hour12: false
+            });
+            const parts = formatter.formatToParts(new Date());
+            const hourPart = parts.find(p => p.type === 'hour');
+            return hourPart ? parseInt(hourPart.value, 10) : new Date().getHours();
+          } catch (e) {
+            return new Date().getHours();
+          }
+        }
+
+        function filterLocationsByBusinessHours(locations) {
+          const active = [];
+          const closed = [];
+          for (const loc of locations) {
+            const hr = getCityHour(loc);
+            if (hr >= 9 && hr < 17) {
+              active.push({ name: loc, hour: hr });
+            } else {
+              closed.push({ name: loc, hour: hr });
+            }
+          }
+          return { active, closed };
+        }
+        
+        let query = defaultIndustries[0];
+        let location = defaultLocations[0];
+        let selectionReason = 'cold_start';
+        
+        if (!randomize) {
+          log('Executing Smart Campaign Selection...');
+          try {
+            const [settings, campaignMetrics] = await Promise.all([
+              fetch('/api/settings').then(r => r.json()),
+              fetch('/api/campaign-metrics').then(r => r.json()).catch(() => ({}))
+            ]);
+            
+            const targetIndustries = settings.target_industries ? settings.target_industries.split(',').map(i => i.trim()).filter(Boolean) : defaultIndustries;
+            const targetLocations = settings.target_locations ? settings.target_locations.split(',').map(l => l.trim()).filter(Boolean) : defaultLocations;
+
+            log('Checking target location timezones for active business hours (9 AM - 5 PM local time)...');
+            const { active, closed } = filterLocationsByBusinessHours(targetLocations);
+            let candidateLocations = targetLocations;
+
+            if (active.length > 0) {
+              candidateLocations = active.map(a => a.name);
+              log(`☀️ Active Timezone Routing: Prioritizing cities currently in business hours: ${active.map(a => `${a.name} (${a.hour}:00)`).join(', ')}`);
+            } else {
+              log(`🌙 Note: None of the target cities are currently in business hours. Proceeding with all locations: ${closed.map(c => `${c.name} (${c.hour}:00)`).join(', ')}`);
+            }
+
+            // Determine best historical campaign (reply rate >= 5%)
+            let bestCombo = null;
+            let bestReplyRate = 0;
+            
+            for (const key in campaignMetrics) {
+              const metric = campaignMetrics[key];
+              if (metric.sent >= 20) {
+                const replyRate = (metric.replied || 0) / metric.sent;
+                if (replyRate >= 0.05 && replyRate > bestReplyRate) {
+                  bestReplyRate = replyRate;
+                  bestCombo = { query: metric.query, location: metric.location, type: 'historical_best' };
+                }
+              }
+            }
+            
+            // Check if our historical best is in an active timezone. If not, bypass to find a location currently active
+            if (bestCombo && candidateLocations.includes(bestCombo.location)) {
+              query = bestCombo.query;
+              location = bestCombo.location;
+              selectionReason = bestCombo.type;
+            } else {
+              if (bestCombo) {
+                log(`Historical best campaign in ${bestCombo.location} bypassed because it is not currently in active business hours.`);
+              }
+              // Cold start logic: Find prioritized industry with < 30 leads in first city
+              const currentCity = candidateLocations[0] || 'Austin';
+              location = currentCity;
+              
+              let foundCombo = false;
+              for (const ind of targetIndustries) {
+                const key = `${ind}_in_${currentCity}`.toLowerCase().replace(/\s+/g, '_');
+                const metric = campaignMetrics[key] || { sent: 0 };
+                if (metric.sent < 30) {
+                  query = ind;
+                  foundCombo = true;
+                  break;
+                }
+              }
+              
+              if (!foundCombo) {
+                // Move to next city if first city is fully tested (>= 30 leads)
+                const nextCity = candidateLocations[1] || candidateLocations[0] || 'Austin';
+                location = nextCity;
+                query = targetIndustries[0] || 'Plumbers';
+              }
+              selectionReason = 'cold_start';
+            }
+          } catch (err) {
+            log(`⚠️ Failed smart selection, falling back: ${err.message}`);
+          }
+        } else {
+          query = defaultIndustries[Math.floor(Math.random() * defaultIndustries.length)];
+          const { active, closed } = filterLocationsByBusinessHours(defaultLocations);
+          if (active.length > 0) {
+            const activeCities = active.map(a => a.name);
+            location = activeCities[Math.floor(Math.random() * activeCities.length)];
+            selectionReason = 'randomized (timezone optimized)';
+            log(`☀️ Timezone optimized: Selected "${location}" because it is currently in active business hours.`);
+          } else {
+            location = defaultLocations[Math.floor(Math.random() * defaultLocations.length)];
+            selectionReason = 'randomized';
+          }
+        }
+        
+        log(`Selection Reason: ${selectionReason}`);
+        log(`Campaign Parameters: Query: "${query}" | Location: "${location}" | Limit: ${limit}`);
+
+        try {
+          // STEP 1: Discover Leads
+          log('STEP 1: DISCOVERING LEADS...', true);
+          log(`Searching Google Places API for "${query}" in "${location}"...`);
+          
+          // Discover a larger batch (limit * 3, minimum 15) to guarantee we find leads with valid emails
+          const discoverLimit = Math.max(15, limit * 3);
+          const discoverRes = await fetch('/api/discover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, location, limit: discoverLimit })
+          });
+          const discoverData = await discoverRes.json();
+          if (!discoverRes.ok || !discoverData.results) {
+            throw new Error(discoverData.error || 'Lead discovery failed');
+          }
+          
+          const discovered = discoverData.results;
+          log(`Discovered ${discovered.length} businesses matching query.`);
+
+          if (discovered.length === 0) {
+            log('No businesses found. Autopilot stopping.');
+            btn.disabled = false;
+            btn.textContent = 'Start E2E Campaign Autopilot';
+            return;
+          }
+
+          // STEP 2: Import to CRM
+          log('STEP 2: IMPORTING TO CRM...', true);
+          const savedLeads = [];
+          for (let i = 0; i < discovered.length; i++) {
+            const item = discovered[i];
+            log(`Importing: "${item.business_name}"...`);
+            
+            const response = await fetch('/api/leads', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                businessName: item.business_name,
+                category: item.category,
+                location: item.location,
+                publicWebsite: item.public_website || '',
+                publicPhone: item.public_phone || '',
+                source: `Autopilot: ${query} in ${location}`
+              })
+            });
+            if (response.ok) {
+              const data = await response.json();
+              savedLeads.push(data.lead);
+              log(`Imported successfully: "${item.business_name}" (ID: ${data.lead.id})`);
+            } else {
+              const err = await response.json();
+              if (response.status === 409 && err.lead) {
+                const existingLead = err.lead;
+                const nonContactedStages = ['NEW', 'DISCOVERED', 'ANALYZED', 'QUALIFIED', 'CONTACT_READY'];
+                if (nonContactedStages.includes(existingLead.stage)) {
+                  savedLeads.push(existingLead);
+                  log(`Lead already exists but is not contacted yet (stage: ${existingLead.stage}). Including in campaign.`);
+                } else {
+                  log(`Skipping "${item.business_name}": already contacted or won/lost (stage: ${existingLead.stage}).`);
+                }
+              } else {
+                log(`⚠️ Import failed for "${item.business_name}": ${err.error || 'Unknown error'}`);
+              }
+            }
+          }
+
+          log(`Successfully imported ${savedLeads.length}/${discovered.length} leads.`);
+
+          if (savedLeads.length === 0) {
+            log('No leads imported. Autopilot stopping.');
+            btn.disabled = false;
+            btn.textContent = 'Start E2E Campaign Autopilot';
+            return;
+          }
+
+          // STEP 3: Analyze Websites & Scrape Emails
+          log('STEP 3: ANALYZING WEBSITES & SCRAPING EMAILS...', true);
+          const analyzedLeads = [];
+          let leadsWithEmailCount = 0;
+          
+          for (let i = 0; i < savedLeads.length; i++) {
+            // Stop analyzing if we have already found enough leads with public email addresses
+            if (leadsWithEmailCount >= limit) {
+              log(`Reached target limit of ${limit} leads with email. Skipping analysis for remaining ${savedLeads.length - i} discovered leads.`);
+              break;
+            }
+            
+            const lead = savedLeads[i];
+            log(`Analyzing website for: "${lead.business_name}"...`);
+            try {
+              const analyzeRes = await fetch(`/api/leads/${lead.id}/analyze`, { method: 'POST' });
+              const analyzeData = await analyzeRes.json();
+              if (analyzeRes.ok && analyzeData.lead) {
+                const updatedLead = analyzeData.lead;
+                analyzedLeads.push(updatedLead);
+                if (updatedLead.public_email && updatedLead.public_email.trim() !== '') {
+                  log(`📧 Scraped email for "${lead.business_name}": ${updatedLead.public_email}`);
+                  leadsWithEmailCount++;
+                } else {
+                  log(`Analyzed "${lead.business_name}" (No email found on website).`);
+                }
+              } else {
+                throw new Error(analyzeData.error || 'Website analysis failed');
+              }
+            } catch (err) {
+              log(`⚠️ Analysis failed for "${lead.business_name}": ${err.message}`);
+              analyzedLeads.push(lead); // Keep the lead in the queue even if analysis failed
+            }
+
+            if (i < savedLeads.length - 1 && leadsWithEmailCount < limit) {
+              log('Waiting 4s to satisfy rate limits...');
+              await new Promise(resolve => setTimeout(resolve, 4000));
+            }
+          }
+
+          // STEP 4: Qualify & Score Leads
+          log('STEP 4: SCORING & QUALIFYING LEADS...', true);
+          const qualifiedLeads = [];
+          
+          // Filter to only score leads that have valid public email addresses
+          const leadsToScore = analyzedLeads.filter(l => l.public_email && l.public_email.trim() !== '');
+          
+          for (let i = 0; i < leadsToScore.length; i++) {
+            const lead = leadsToScore[i];
+            log(`Scoring lead ${i+1}/${leadsToScore.length}: "${lead.business_name}"...`);
+            
+            try {
+              const scoreRes = await fetch('/api/ai/lead-score', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lead_id: lead.id, regenerate: false })
+              });
+              const scoreData = await scoreRes.json();
+              if (scoreData.score) {
+                // Update CRM lead
+                const updateRes = await fetch(`/api/leads/${lead.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ score: scoreData.score, priority: scoreData.priority, qualification_reason: scoreData.reasoning })
+                });
+                if (updateRes.ok) {
+                  const updatedLead = await updateRes.json();
+                  lead.score = scoreData.score;
+                  lead.priority = scoreData.priority;
+                  qualifiedLeads.push(lead);
+                  log(`Qualified: "${lead.business_name}" | Score: ${scoreData.score} | Priority: ${scoreData.priority}`);
+                } else {
+                  throw new Error('CRM update failed');
+                }
+              } else {
+                throw new Error(scoreData.error || 'Scoring returned no results');
+              }
+            } catch (err) {
+              log(`⚠️ Scoring failed for "${lead.business_name}": ${err.message}`);
+            }
+
+            if (i < leadsToScore.length - 1) {
+              log('Waiting 4s to satisfy Gemini API limits...');
+              await new Promise(resolve => setTimeout(resolve, 4000));
+            }
+          }
+
+          // STEP 5: Draft outreach emails
+          log('STEP 5: GENERATING EMAIL PITCH DRAFTS...', true);
+          const drafts = [];
+          for (let i = 0; i < qualifiedLeads.length; i++) {
+            const lead = qualifiedLeads[i];
+            
+            // Skip drafting if the lead lacks a public email address
+            if (!lead.public_email || lead.public_email.trim() === '') {
+              log(`ℹ️ Skipping email draft for "${lead.business_name}": Lead has no public email address.`);
+              continue;
+            }
+            
+            log(`Generating cold email draft for "${lead.business_name}"...`);
+
+            try {
+              const emailRes = await fetch('/api/ai/email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  lead_id: lead.id,
+                  tone: 'Professional',
+                  lang: 'English',
+                  service: 'Web Design, Development, SEO',
+                  regenerate: false
+                })
+              });
+              const emailData = await emailRes.json();
+
+              if (!emailRes.ok || !emailData.body) {
+                throw new Error(emailData.error || 'Empty body returned from AI service');
+              }
+
+              // Save to CRM as Draft
+              const saveRes = await fetch('/api/outreach/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  lead_id: lead.id,
+                  subject: emailData.subject || 'Outreach Pitch',
+                  body: emailData.body,
+                  channel: 'email'
+                })
+              });
+
+              if (!saveRes.ok) {
+                const errData = await saveRes.json().catch(() => ({}));
+                throw new Error(errData.error || 'Saving outreach draft failed');
+              }
+              
+              const saveMsg = await saveRes.json();
+              drafts.push({ message: saveMsg.message || saveMsg, lead });
+              log(`Created email draft for "${lead.business_name}".`);
+            } catch (err) {
+              log(`⚠️ Email draft failed for "${lead.business_name}": ${err.message}`);
+            }
+
+            if (i < qualifiedLeads.length - 1) {
+              log('Waiting 4s to satisfy Gemini API limits...');
+              await new Promise(resolve => setTimeout(resolve, 4000));
+            }
+          }
+
+          // STEP 6: Approve & Send Emails E2E
+          log('STEP 6: DISPATCHING COLD EMAILS...', true);
+          let successCount = 0;
+          let failedCount = 0;
+          for (let i = 0; i < drafts.length; i++) {
+            const { message, lead } = drafts[i];
+            const toEmail = lead.public_email || 'no public email';
+            log(`Approving & sending email to "${lead.business_name}" (${toEmail})...`);
+
+            try {
+              // 1. Approve
+              const approveRes = await fetch(`/api/outreach/messages/${message.id}/approve`, { method: 'PUT' });
+              if (!approveRes.ok) {
+                const errData = await approveRes.json().catch(() => ({}));
+                throw new Error(errData.error || 'Approval failed');
+              }
+              
+              // 2. Send
+              const sendRes = await fetch(`/api/outreach/messages/${message.id}/send`, { method: 'PUT' });
+              const sendData = await sendRes.json();
+              if (!sendRes.ok) throw new Error(sendData.error || 'Send failed');
+              
+              successCount++;
+              log(`Successfully sent email: "${lead.business_name}".` + (sendData.note ? ` (${sendData.note})` : ''));
+            } catch (err) {
+              log(`⚠️ Sending failed for "${lead.business_name}": ${err.message}`);
+              failedCount++;
+            }
+
+            if (i < drafts.length - 1) {
+              // Random delay between 100 and 140 seconds (averages to 2 minutes)
+              const delayMs = Math.floor(Math.random() * (140000 - 100000 + 1)) + 100000;
+              const delaySec = Math.round(delayMs / 1000);
+              log(`Waiting ${delaySec}s to mimic human sending and protect Gmail reputation...`);
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+          }
+
+          // FINISH REPORT
+          log('AUTOPILOT CAMPAIGN COMPLETE 🎉', true);
+          log(`Discovered & Saved: ${savedLeads.length}`);
+          log(`Scored & Qualified: ${qualifiedLeads.length}`);
+          log(`Emails Generated:   ${drafts.length}`);
+          log(`Emails Dispatched:  ${successCount} (Failed: ${failedCount})`);
+          log('===================================', true);
+          
+          try {
+            loadDashboard();
+            loadLeads();
+            loadPipelineBoard();
+            loadOutreachTab();
+            loadEmailApprovalsTab();
+          } catch (refreshErr) {
+            console.error('Failed to auto-refresh CRM views after Autopilot campaign completion:', refreshErr);
+          }
+          
+          alert('Campaign Autopilot completed successfully!');
+        } catch (err) {
+          log(`❌ AUTOPILOT FATAL ERROR: ${err.message}`, true);
+          alert('Autopilot failed: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Start E2E Campaign Autopilot';
+        }
+      });
+
+      // -------------------------------------------------------------
+      // INBOX TAB
+      // -------------------------------------------------------------
+      async function loadInboxTab() {
+        loadDiscoveryDropdowns();
+        const listEl = document.getElementById('conversationsList');
+        const convos = await fetch('/api/conversations').then(r => r.json());
+        listEl.innerHTML = convos.map(c => `
+          <div class="row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+            <div style="display:flex; justify-content:space-between; width:100%;">
+              <span class="pill ${c.direction === 'inbound' ? 'pill-success' : 'pill-warning'}">${c.direction.toUpperCase()}</span>
+              <span class="muted">${c.channel.toUpperCase()}</span>
+            </div>
+            <strong>Subject: ${c.subject || 'N/A'}</strong>
+            <div>${c.body}</div>
+          </div>
+        `).join('') || '<div class="muted">No messages in inbox.</div>';
+      }
+
+      document.getElementById('inboundReplyForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        payload.direction = 'inbound';
+        payload.channel = 'email';
+        const response = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadInboxTab();
+        }
+      });
+
+      document.getElementById('btnSyncGmail').addEventListener('click', async () => {
+        const btn = document.getElementById('btnSyncGmail');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Syncing...';
+        try {
+          const res = await fetch('/api/gmail/sync', { method: 'POST' }).then(r => r.json());
+          if (res.error) {
+            alert(res.error);
+          } else {
+            alert(res.message);
+            loadInboxTab();
+          }
+        } catch (err) {
+          alert('Sync failed: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      });
+
+      // -------------------------------------------------------------
+      // MEETINGS TAB
+      // -------------------------------------------------------------
+      async function loadMeetingsTab() {
+        loadDiscoveryDropdowns();
+        const gmailStatus = await fetch('/api/gmail/status').then(r => r.json());
+        document.getElementById('gmailStatusText').textContent = gmailStatus.connected ? 'Connected' : gmailStatus.reason || 'Disconnected';
+        
+        const calendarStatus = await fetch('/api/calendar/status').then(r => r.json());
+        document.getElementById('calendarStatusText').textContent = calendarStatus.connected ? 'Connected' : calendarStatus.reason || 'Disconnected';
+
+        const listEl = document.getElementById('meetingsList');
+        const meetings = await fetch('/api/meetings').then(r => r.json());
+        listEl.innerHTML = meetings.map(m => `
+          <div class="row">
+            <div>
+              <strong>${m.title}</strong>
+              <div class="muted">${new Date(m.scheduled_at).toLocaleString()} (${m.duration_minutes} mins)</div>
+              ${m.escalation_reason ? `<div style="color: var(--warning); font-size:0.85rem;">Escalation Reason: ${m.escalation_reason}</div>` : ''}
+            </div>
+            <div>
+              <button class="danger" onclick="deleteMeeting('${m.id}')">Cancel</button>
+            </div>
+          </div>
+        `).join('') || '<div class="muted">No scheduled meetings.</div>';
+      }
+
+      document.getElementById('btnGmailAuth').addEventListener('click', async () => {
+        const res = await fetch('/api/gmail/auth-url').then(r => r.json());
+        if (res.auth_url) window.open(res.auth_url, '_blank');
+        else alert(res.error || 'Failed to get Gmail auth url');
+      });
+
+      document.getElementById('btnCalendarAuth').addEventListener('click', async () => {
+        const res = await fetch('/api/calendar/auth-url').then(r => r.json());
+        if (res.auth_url) window.open(res.auth_url, '_blank');
+        else alert(res.error || 'Failed to get Calendar auth url');
+      });
+
+      document.getElementById('meetingForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const response = await fetch('/api/meetings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadMeetingsTab();
+        }
+      });
+
+      async function deleteMeeting(id) {
+        if (confirm('Cancel this meeting?')) {
+          await fetch(`/api/meetings/${id}`, { method: 'DELETE' });
+          loadMeetingsTab();
+        }
+      }
+
+      // -------------------------------------------------------------
+      // PROJECTS TAB
+      // -------------------------------------------------------------
+      async function loadProjectsTab() {
+        loadDiscoveryDropdowns();
+        const listEl = document.getElementById('projectsList');
+        const projects = await fetch('/api/projects').then(r => r.json());
+        listEl.innerHTML = projects.map(p => `
+          <div class="row" onclick="selectProject('${p.id}')" style="cursor:pointer;">
+            <div>
+              <strong>${p.name}</strong>
+              <div class="muted">Status: ${p.status}</div>
+            </div>
+            <span class="pill">${p.status}</span>
+          </div>
+        `).join('') || '<div class="muted">No projects created yet.</div>';
+      }
+
+      document.getElementById('projectForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadProjectsTab();
+        }
+      });
+
+      async function selectProject(id) {
+        selectedProjectId = id;
+        document.getElementById('projectWorkArea').classList.remove('hidden');
+        document.getElementById('projectDetailsSection').classList.remove('hidden');
+        
+        const project = await fetch(`/api/projects/${id}`).then(r => r.json());
+        document.getElementById('currentProjectTitle').textContent = project.name;
+        document.getElementById('projectStatusPill').textContent = project.status;
+        document.getElementById('projectDescPText').textContent = project.description || 'No description.';
+        
+        loadProjectTasks(id);
+        loadProjectDemos(id);
+      }
+
+      async function loadProjectTasks(projectId) {
+        const listEl = document.getElementById('projectTasksList');
+        const tasks = await fetch(`/api/projects/${projectId}/tasks`).then(r => r.json());
+        listEl.innerHTML = tasks.map(t => `
+          <div class="row">
+            <div>
+              <span style="${t.status === 'DONE' ? 'text-decoration: line-through;' : ''}">${t.title}</span>
+              <div class="muted">Status: ${t.status} | Priority: ${t.priority}</div>
+            </div>
+            <div>
+              ${t.status !== 'DONE' ? `<button class="primary" onclick="markTaskDone('${t.id}')">Complete</button>` : ''}
+            </div>
+          </div>
+        `).join('') || '<div class="muted">No tasks added yet.</div>';
+      }
+
+      document.getElementById('projectTaskForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const response = await fetch(`/api/projects/${selectedProjectId}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadProjectTasks(selectedProjectId);
+        }
+      });
+
+      async function markTaskDone(taskId) {
+        await fetch(`/api/project-tasks/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'DONE' })
+        });
+        loadProjectTasks(selectedProjectId);
+      }
+
+      async function loadProjectDemos(projectId) {
+        const demosList = document.getElementById('projectDemosList');
+        const demos = await fetch(`/api/demos?project_id=${projectId}`).then(r => r.json());
+        demosList.innerHTML = demos.map(d => `
+          <div class="row">
+            <div>
+              <strong>URL:</strong> <a href="${d.demo_url}" target="_blank" style="color:var(--accent);">${d.demo_url}</a>
+              <div class="muted">${d.description || ''}</div>
+            </div>
+          </div>
+        `).join('') || '<div class="muted">No demo versions.</div>';
+
+        // Load feedback
+        const fbList = document.getElementById('projectFeedbackList');
+        const fbs = await fetch(`/api/feedback?project_id=${projectId}`).then(r => r.json());
+        fbList.innerHTML = fbs.map(f => `
+          <div class="row" style="flex-direction:column; align-items:flex-start;">
+            <div><strong>Rating:</strong> ${f.rating}/5</div>
+            <div>${f.comments}</div>
+          </div>
+        `).join('') || '<div class="muted">No feedback yet.</div>';
+
+        // Load revisions
+        const revList = document.getElementById('projectRevisionsList');
+        const revs = await fetch(`/api/revisions?project_id=${projectId}`).then(r => r.json());
+        revList.innerHTML = revs.map(r => `
+          <div class="row">
+            <div>
+              <strong>Revision #${r.revision_number}</strong> - Status: ${r.status}
+              <div>${r.description}</div>
+            </div>
+            <div>
+              ${r.status === 'REQUESTED' ? `<button class="primary" onclick="updateRevisionStatus('${r.id}', 'IN_PROGRESS')">Work</button>` : ''}
+              ${r.status === 'IN_PROGRESS' ? `<button class="primary" onclick="updateRevisionStatus('${r.id}', 'COMPLETED')">Complete</button>` : ''}
+            </div>
+          </div>
+        `).join('') || '<div class="muted">No revision history.</div>';
+      }
+
+      document.getElementById('demoForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        payload.project_id = selectedProjectId;
+        const response = await fetch('/api/demos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadProjectDemos(selectedProjectId);
+        }
+      });
+
+      document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        payload.project_id = selectedProjectId;
+        const response = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadProjectDemos(selectedProjectId);
+        }
+      });
+
+      document.getElementById('revisionForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        payload.project_id = selectedProjectId;
+        const response = await fetch('/api/revisions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadProjectDemos(selectedProjectId);
+          selectProject(selectedProjectId); // Refresh project status
+        }
+      });
+
+      async function updateRevisionStatus(id, status) {
+        await fetch(`/api/revisions/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+        loadProjectDemos(selectedProjectId);
+      }
+
+      document.getElementById('deliveryForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        
+        // Save production url to project first
+        await fetch(`/api/projects/${selectedProjectId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ production_url: payload.production_url })
+        });
+
+        // Trigger deliver action
+        const response = await fetch(`/api/projects/${selectedProjectId}/deliver`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        
+        const result = await response.json();
+        const issuesEl = document.getElementById('deliveryIssues');
+        if (response.ok) {
+          issuesEl.innerHTML = '<span style="color: var(--success);">Project successfully marked as DELIVERED!</span>';
+          selectProject(selectedProjectId);
+          loadProjectsTab();
+        } else {
+          issuesEl.innerHTML = `<strong>Delivery checklist failed:</strong><br>${result.issues.join('<br>')}`;
+        }
+      });
+
+      // -------------------------------------------------------------
+      // APPROVALS TAB
+      // -------------------------------------------------------------
+      async function loadApprovalsTab() {
+        const listEl = document.getElementById('approvalsList');
+        const approvals = await fetch('/api/approvals').then(r => r.json());
+        listEl.innerHTML = approvals.map(a => `
+          <div class="row">
+            <div>
+              <strong>Entity: ${a.entity_type} (#${a.entity_id.substring(0,8)})</strong>
+              <div>Reason: ${a.reason}</div>
+              <div class="muted">Status: ${a.status}</div>
+            </div>
+            <div>
+              ${a.status === 'PENDING' ? `
+                <button class="primary" onclick="decideApproval('${a.id}', 'APPROVED')">Approve</button>
+                <button class="danger" onclick="decideApproval('${a.id}', 'REJECTED')">Reject</button>
+              ` : ''}
+            </div>
+          </div>
+        `).join('') || '<div class="muted">No pending approval requests.</div>';
+      }
+
+      async function decideApproval(id, status) {
+        await fetch(`/api/approvals/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+        loadApprovalsTab();
+      }
+
+      // -------------------------------------------------------------
+      // PAYMENTS TAB
+      // -------------------------------------------------------------
+      async function loadPaymentsTab() {
+        loadDiscoveryDropdowns();
+        const listEl = document.getElementById('paymentsList');
+        const payments = await fetch('/api/payments').then(r => r.json());
+        listEl.innerHTML = payments.map(p => `
+          <div class="row">
+            <div>
+              <strong>Total Value: $${p.total}</strong> (Paid: $${p.advance} | Balance: $${p.balance})
+              <div class="muted">Status: ${p.status} | Reference: ${p.reference || 'N/A'}</div>
+            </div>
+            <div>
+              ${p.status !== 'PAID' ? `<button class="primary" onclick="markPaid('${p.id}')">Mark Fully Paid</button>` : ''}
+            </div>
+          </div>
+        `).join('') || '<div class="muted">No payment records logged.</div>';
+      }
+
+      document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const response = await fetch('/api/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+          e.target.reset();
+          loadPaymentsTab();
+        }
+      });
+
+      async function markPaid(id) {
+        await fetch(`/api/payments/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'PAID' })
+        });
+        loadPaymentsTab();
+      }
+
+      // -------------------------------------------------------------
+      // REPORTS TAB
+      // -------------------------------------------------------------
+      async function loadReportsTab() {
+        const from = document.getElementById('reportFrom').value;
+        const to = document.getElementById('reportTo').value;
+        const params = new URLSearchParams();
+        if (from) params.set('from', from);
+        if (to) params.set('to', to);
+        const report = await fetch(`/api/reports/summary?${params.toString()}`).then(r => r.json());
+        
+        document.getElementById('reportsStats').innerHTML = [
+          ['Total Period Leads', report.leads.total],
+          ['Qualified Period Leads', report.leads.qualified],
+          ['Outreach Contacts', report.contacts],
+          ['Response Replies', report.replies],
+          ['Meetings Scheduled', report.meetings],
+          ['Won Deals Count', report.deals.won],
+          ['Conversion Rate', `${report.conversion_rate}%`],
+          ['Revenue Confirmed', `$${report.revenue}`],
+          ['Open Pipeline Value', `$${report.pipeline_value}`],
+          ['Best Lead Category', report.best_category],
+          ['Best Location', report.best_location]
+        ].map(([label, value]) => `<div class="card"><div class="muted">${label}</div><h2>${value}</h2></div>`).join('');
+      }
+
+      document.getElementById('btnFilterReports').addEventListener('click', loadReportsTab);
+
+      // -------------------------------------------------------------
+      // NOTIFICATIONS TAB
+      // -------------------------------------------------------------
+      async function loadNotificationsTab() {
+        const listEl = document.getElementById('notificationsList');
+        const notifications = await fetch('/api/notifications').then(r => r.json());
+        listEl.innerHTML = notifications.map(n => `
+          <div class="row notification-item ${n.is_read ? 'read' : ''}">
+            <div>
+              <strong>${n.title}</strong> [${n.type.toUpperCase()}]
+              <div>${n.message}</div>
+              <div class="muted" style="font-size:0.8rem;">${new Date(n.created_at).toLocaleString()}</div>
+            </div>
+            <div>
+              ${!n.is_read ? `<button class="primary" onclick="markNotificationRead('${n.id}')">Read</button>` : ''}
+            </div>
+          </div>
+        `).join('') || '<div class="muted">No alerts.</div>';
+      }
+
+      async function markNotificationRead(id) {
+        await fetch(`/api/notifications/${id}/read`, { method: 'PUT' });
+        loadNotificationsTab();
+      }
+
+      document.getElementById('btnReadAllNotifications').addEventListener('click', async () => {
+        await fetch('/api/notifications/read-all', { method: 'PUT' });
+        loadNotificationsTab();
+      });
+
+      // -------------------------------------------------------------
+      // SETTINGS TAB
+      // -------------------------------------------------------------
+      async function loadSettingsTab() {
+        const settings = await fetch('/api/settings').then(r => r.json());
+        
+        // Load scoring rules
+        if (settings.lead_scoring_rules) {
+          const rules = JSON.parse(settings.lead_scoring_rules);
+          const form = document.getElementById('settingsScoringForm');
+          form.noWebsite.value = rules.noWebsite || 30;
+          form.missingContact.value = rules.missingContact || 25;
+          form.publicContact.value = rules.publicContact || 20;
+          form.contactValid.value = rules.contactValid || 5;
+        }
+
+        // Load general settings
+        const genForm = document.getElementById('settingsGeneralForm');
+        genForm.daily_contact_limit.value = settings.daily_contact_limit || 10;
+        genForm.follow_up_interval_days.value = settings.follow_up_interval_days || 3;
+        genForm.max_follow_ups.value = settings.max_follow_ups || 4;
+        genForm.minimum_acceptable_price.value = settings.minimum_acceptable_price || 500;
+        genForm.gemini_api_key.value = settings.gemini_api_key || '';
+      }
+
+      document.getElementById('settingsScoringForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const rules = {
+          noWebsite: Number(formData.get('noWebsite')),
+          missingContact: Number(formData.get('missingContact')),
+          publicContact: Number(formData.get('publicContact')),
+          contactValid: Number(formData.get('contactValid'))
+        };
+        const response = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lead_scoring_rules: JSON.stringify(rules) })
+        });
+        if (response.ok) alert('Scoring rules updated successfully!');
+      });
+
+      document.getElementById('settingsGeneralForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const response = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (response.ok) alert('General settings updated successfully!');
+      });
+
+      // -------------------------------------------------------------
+      // GLOBAL AUTH AND LOGOUT
+      // -------------------------------------------------------------
+      document.getElementById('logoutButton').addEventListener('click', async () => {
+        const response = await fetch('/api/auth/logout', { method: 'POST' });
+        if (response.ok) window.location.href = '/';
+      });
+
+      async function fetchCurrentUser() {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const result = await response.json();
+          document.getElementById('userInfo').textContent = `${result.user.full_name || result.user.username}`;
+          return true;
+        }
+        window.location.href = '/';
+        return false;
+      }
+
+      // -------------------------------------------------------------
+      // AI SALES ASSISTANT INTEGRATION
+      // -------------------------------------------------------------
+      titles['ai-assistant'] = 'AI Sales Assistant';
+      descs['ai-assistant'] = 'Draft emails, messages, scripts, audits, and closing probabilities.';
+
+      // AI Sub-tab navigation
+      document.querySelectorAll('[data-ai-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('[data-ai-tab]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          
+          document.querySelectorAll('.ai-tab-view').forEach(view => view.classList.add('hidden'));
+          const target = btn.dataset.aiTab;
+          document.getElementById(`ai-tab-${target}`).classList.remove('hidden');
+        });
+      });
+
+      // Show/Hide Gemini API Key
+      document.getElementById('btnToggleGeminiVisibility').addEventListener('click', (e) => {
+        const input = document.getElementById('geminiApiKeyInput');
+        if (input.type === 'password') {
+          input.type = 'text';
+          e.target.textContent = 'Hide';
+        } else {
+          input.type = 'password';
+          e.target.textContent = 'Show';
+        }
+      });
+
+      // Test Gemini Connection
+      document.getElementById('btnTestGeminiConnection').addEventListener('click', async () => {
+        const key = document.getElementById('geminiApiKeyInput').value.trim();
+        if (!key) {
+          alert('Please enter a Gemini API Key first.');
+          return;
+        }
+        const btn = document.getElementById('btnTestGeminiConnection');
+        const originalText = btn.textContent;
+        btn.textContent = 'Testing...';
+        btn.disabled = true;
+        try {
+          const res = await fetch('/api/ai/test-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gemini_api_key: key })
+          });
+          const data = await res.json();
+          if (data.success) {
+            alert('Connection successful! Gemini model gemini-1.5-flash is active.');
+          } else {
+            alert('Connection failed: ' + (data.error || 'Unknown error'));
+          }
+        } catch (err) {
+          alert('Connection error: ' + err.message);
+        } finally {
+          btn.textContent = originalText;
+          btn.disabled = false;
+        }
+      });
+
+      // Outreach Form Channel select conditional toggling
+      document.getElementById('outreachChannelSelect').addEventListener('change', (e) => {
+        const channel = e.target.value;
+        document.getElementById('outreachEmailGroup').classList.add('hidden');
+        document.getElementById('outreachWhatsappGroup').classList.add('hidden');
+        document.getElementById('outreachProposalGroup').classList.add('hidden');
+        
+        if (channel === 'email') {
+          document.getElementById('outreachEmailGroup').classList.remove('hidden');
+          document.getElementById('outreachBodyTextarea').required = true;
+          document.getElementById('outreachWhatsappTextarea').required = false;
+          document.getElementById('outreachProposalTextarea').required = false;
+        } else if (channel === 'whatsapp') {
+          document.getElementById('outreachWhatsappGroup').classList.remove('hidden');
+          document.getElementById('outreachBodyTextarea').required = false;
+          document.getElementById('outreachWhatsappTextarea').required = true;
+          document.getElementById('outreachProposalTextarea').required = false;
+        } else if (channel === 'proposal') {
+          document.getElementById('outreachProposalGroup').classList.remove('hidden');
+          document.getElementById('outreachBodyTextarea').required = false;
+          document.getElementById('outreachWhatsappTextarea').required = false;
+          document.getElementById('outreachProposalTextarea').required = true;
+        }
+      });
+
+      // Outreach Page AI buttons click handlers
+      const runOutreachAIGenerate = async (feature, targetEl, event) => {
+        const leadId = document.getElementById('outreachLeadSelect').value;
+        if (!leadId) {
+          alert('Please select a lead first.');
+          return;
+        }
+        const btn = event.currentTarget;
+        const originalText = btn.textContent;
+        btn.textContent = 'Generating...';
+        btn.disabled = true;
+        try {
+          const res = await fetch(`/api/ai/${feature}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lead_id: leadId })
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          
+          if (feature === 'email') {
+            if (targetEl.id === 'outreachSubjectInput') {
+              targetEl.value = data.subject || '';
+            } else {
+              targetEl.value = data.body || '';
+            }
+          } else if (feature === 'whatsapp') {
+            targetEl.value = data.message || '';
+          } else if (feature === 'proposal') {
+            targetEl.value = data.proposal || '';
+          }
+        } catch (err) {
+          alert('AI outreach generation failed: ' + err.message);
+        } finally {
+          btn.textContent = originalText;
+          btn.disabled = false;
+        }
+      };
+
+      document.getElementById('btnAiOutreachSubject').addEventListener('click', (e) => {
+        runOutreachAIGenerate('email', document.getElementById('outreachSubjectInput'), e);
+      });
+      document.getElementById('btnAiOutreachBody').addEventListener('click', (e) => {
+        runOutreachAIGenerate('email', document.getElementById('outreachBodyTextarea'), e);
+      });
+      document.getElementById('btnAiOutreachWhatsapp').addEventListener('click', (e) => {
+        runOutreachAIGenerate('whatsapp', document.getElementById('outreachWhatsappTextarea'), e);
+      });
+      document.getElementById('btnAiOutreachProposal').addEventListener('click', (e) => {
+        runOutreachAIGenerate('proposal', document.getElementById('outreachProposalTextarea'), e);
+      });
+
+      // AI Assistant Panel Action Listeners
+      async function runAIFeature(feature, regenerate = false) {
+        const leadId = document.getElementById('aiLeadSelect').value;
+        if (!leadId) {
+          alert('Please select a lead first.');
+          return;
+        }
+        
+        const service = document.getElementById('aiServiceInput').value;
+        const tone = document.getElementById('aiToneSelect').value;
+        const lang = document.getElementById('aiLangSelect').value;
+        const customPrompt = document.getElementById('aiCustomPromptInput').value;
+        
+        let objection = '';
+        let message = '';
+        if (feature === 'reply') {
+          const replyInput = document.getElementById('aiReplyInput').value.trim();
+          if (!replyInput) {
+            alert('Please enter what the customer said first.');
+            return;
+          }
+          const replyType = document.getElementById('aiReplyType').value;
+          if (replyType === 'objection-reply') {
+            objection = replyInput;
+          } else {
+            message = replyInput;
+          }
+        }
+
+        const loadingEl = document.getElementById(`ai${capitalize(feature)}Loading`);
+        if (loadingEl) loadingEl.style.display = 'block';
+        
+        const btnGen = document.getElementById(`btnAiGenerate_${feature}`);
+        const btnRegen = document.getElementById(`btnAiRegenerate_${feature}`);
+        if (btnGen) btnGen.disabled = true;
+        if (btnRegen) btnRegen.disabled = true;
+        
+        try {
+          let endpoint = `/api/ai/${feature}`;
+          const payload = { lead_id: leadId, service, tone, lang, customPrompt, regenerate };
+          if (feature === 'reply') {
+            if (objection) {
+              endpoint = '/api/ai/objection-reply';
+              payload.objection = objection;
+            } else {
+              endpoint = '/api/ai/reply';
+              payload.message = message;
+            }
+          } else if (feature === 'audit') {
+            endpoint = '/api/ai/website-audit';
+          } else if (feature === 'score') {
+            endpoint = '/api/ai/lead-score';
+          } else if (feature === 'prep') {
+            endpoint = '/api/ai/meeting-prep';
+          } else if (feature === 'call-script') {
+            endpoint = '/api/ai/call-script';
+          } else if (feature === 'followup') {
+            endpoint = '/api/ai/followup';
+          } else if (feature === 'seo') {
+            endpoint = '/api/ai/seo';
+          }
+          
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Server error occurred');
+          }
+          
+          const data = await res.json();
+          
+          if (feature === 'email') {
+            document.getElementById('aiEmailSubject').value = data.subject || '';
+            document.getElementById('aiEmailBody').value = data.body || '';
+            document.getElementById('aiEmailCTA').value = data.call_to_action || '';
+          } else if (feature === 'whatsapp') {
+            document.getElementById('aiWhatsappMessage').value = data.message || '';
+          } else if (feature === 'proposal') {
+            document.getElementById('aiProposalMarkdown').value = data.proposal || '';
+          } else if (feature === 'audit') {
+            document.getElementById('aiAuditDetails').value = `ISSUES:\n${(data.issues || []).map(i => '- ' + i).join('\n')}\n\nIMPROVEMENTS:\n${(data.improvements || []).map(i => '- ' + i).join('\n')}\n\nRECOMMENDATIONS:\n${(data.service_recommendations || []).map(i => '- ' + i).join('\n')}`;
+          } else if (feature === 'score') {
+            document.getElementById('aiScoreValue').textContent = data.score || '-';
+            document.getElementById('aiScorePriority').textContent = data.priority || '-';
+            document.getElementById('aiScoreConfidence').textContent = data.confidence || '-';
+            document.getElementById('aiScoreReasoning').value = `REASONING:\n${data.reasoning || ''}\n\nSTRENGTHS:\n${(data.strengths || []).map(x => '- ' + x).join('\n')}\n\nWEAKNESSES:\n${(data.weaknesses || []).map(x => '- ' + x).join('\n')}\n\nOPPORTUNITIES:\n${(data.opportunities || []).map(x => '- ' + x).join('\n')}`;
+          } else if (feature === 'prep') {
+            document.getElementById('aiPrepDetails').value = `RECOMMENDED APPROACH:\n${data.recommended_approach || ''}\n\nTALKING POINTS:\n${(data.talking_points || []).map(t => '- ' + t).join('\n')}\n\nQUESTIONS TO ASK:\n${(data.questions_to_ask || []).map(q => '- ' + q).join('\n')}\n\nLIKELY OBJECTIONS:\n${(data.likely_objections || []).map(o => '- ' + o).join('\n')}`;
+          } else if (feature === 'reply') {
+            document.getElementById('aiReplyOutput').value = data.response || '';
+          } else if (feature === 'call-script') {
+            document.getElementById('aiCallScriptText').value = `OPENING:\n${data.opening || ''}\n\nCONVERSATION FLOW:\n${data.conversation || ''}\n\nOBJECTION HANDLING:\n${data.objection_handling || ''}\n\nCLOSING:\n${data.closing || ''}`;
+          } else if (feature === 'followup') {
+            document.getElementById('aiFollowupFirst').value = data.first_followup || '';
+            document.getElementById('aiFollowupSecond').value = data.second_followup || '';
+            document.getElementById('aiFollowupFinal').value = data.final_followup || '';
+          } else if (feature === 'seo') {
+            document.getElementById('aiSeoDetails').value = `SEO ISSUES:\n${(data.seo_issues || []).map(i => '- ' + i).join('\n')}\n\nMETA TITLE SUGGESTIONS:\n${(data.meta_title_suggestions || []).map(t => '- ' + t).join('\n')}\n\nMETA DESCRIPTION SUGGESTION:\n${data.meta_description || ''}\n\nKEYWORD IDEAS:\n${(data.keyword_ideas || []).map(k => '- ' + k).join('\n')}\n\nCONTENT IMPROVEMENTS:\n${(data.content_improvements || []).map(c => '- ' + c).join('\n')}`;
+          }
+          
+          const btnCopy = document.getElementById(`btnAiCopy_${feature}`);
+          const btnSave = document.getElementById(`btnAiSave_${feature}`);
+          if (btnRegen) btnRegen.style.display = 'inline-block';
+          if (btnCopy) btnCopy.style.display = 'inline-block';
+          if (btnSave) btnSave.style.display = 'inline-block';
+          
+        } catch (err) {
+          alert('AI Generation failed: ' + err.message);
+        } finally {
+          if (loadingEl) loadingEl.style.display = 'none';
+          if (btnGen) btnGen.disabled = false;
+          if (btnRegen) btnRegen.disabled = false;
+        }
+      }
+      
+      function capitalize(s) {
+        if (s === 'prep') return 'Prep';
+        if (s === 'reply') return 'Reply';
+        if (s === 'audit') return 'Audit';
+        if (s === 'score') return 'Score';
+        if (s === 'call-script') return 'CallScript';
+        if (s === 'followup') return 'Followup';
+        if (s === 'seo') return 'Seo';
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      }
+
+      function setupAiActionListeners(feature) {
+        document.getElementById(`btnAiGenerate_${feature}`).addEventListener('click', () => runAIFeature(feature, false));
+        document.getElementById(`btnAiRegenerate_${feature}`).addEventListener('click', () => runAIFeature(feature, true));
+        document.getElementById(`btnAiCopy_${feature}`).addEventListener('click', () => {
+          let text = '';
+          if (feature === 'email') {
+            text = `Subject: ${document.getElementById('aiEmailSubject').value}\n\n${document.getElementById('aiEmailBody').value}\n\nCTA: ${document.getElementById('aiEmailCTA').value}`;
+          } else if (feature === 'whatsapp') {
+            text = document.getElementById('aiWhatsappMessage').value;
+          } else if (feature === 'proposal') {
+            text = document.getElementById('aiProposalMarkdown').value;
+          } else if (feature === 'audit') {
+            text = document.getElementById('aiAuditDetails').value;
+          } else if (feature === 'score') {
+            text = `Score: ${document.getElementById('aiScoreValue').textContent}\nPriority: ${document.getElementById('aiScorePriority').textContent}\n${document.getElementById('aiScoreReasoning').value}`;
+          } else if (feature === 'prep') {
+            text = document.getElementById('aiPrepDetails').value;
+          } else if (feature === 'reply') {
+            text = document.getElementById('aiReplyOutput').value;
+          } else if (feature === 'call-script') {
+            text = document.getElementById('aiCallScriptText').value;
+          } else if (feature === 'followup') {
+            text = `FOLLOW-UP 1 (3-5 Days):\n${document.getElementById('aiFollowupFirst').value}\n\nFOLLOW-UP 2 (7-10 Days):\n${document.getElementById('aiFollowupSecond').value}\n\nFINAL FOLLOW-UP:\n${document.getElementById('aiFollowupFinal').value}`;
+          } else if (feature === 'seo') {
+            text = document.getElementById('aiSeoDetails').value;
+          }
+          navigator.clipboard.writeText(text).then(() => {
+            alert('Copied to clipboard!');
+          }).catch(err => {
+            alert('Copy failed: ' + err.message);
+          });
+        });
+        
+        const saveBtn = document.getElementById(`btnAiSave_${feature}`);
+        if (saveBtn) {
+          saveBtn.addEventListener('click', async () => {
+            const leadId = document.getElementById('aiLeadSelect').value;
+            if (feature === 'email' || feature === 'whatsapp') {
+              const payload = {
+                lead_id: leadId,
+                subject: feature === 'email' ? document.getElementById('aiEmailSubject').value : 'WhatsApp Pitch',
+                body: feature === 'email' ? document.getElementById('aiEmailBody').value : document.getElementById('aiWhatsappMessage').value,
+                channel: feature === 'email' ? 'email' : 'whatsapp'
+              };
+              const res = await fetch('/api/outreach/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              if (res.ok) {
+                alert('Saved successfully to Outreach Status Queue!');
+              } else {
+                const err = await res.json();
+                alert('Save failed: ' + (err.error || 'Unknown error'));
+              }
+            } else if (feature === 'score') {
+              const score = Number(document.getElementById('aiScoreValue').textContent);
+              const priority = document.getElementById('aiScorePriority').textContent;
+              const res = await fetch(`/api/leads/${leadId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ score, priority })
+              });
+              if (res.ok) {
+                alert('Lead score and priority successfully updated in CRM!');
+              } else {
+                alert('Save failed.');
+              }
+            } else {
+              let textContent = '';
+              if (feature === 'proposal') textContent = document.getElementById('aiProposalMarkdown').value;
+              else if (feature === 'audit') textContent = document.getElementById('aiAuditDetails').value;
+              else if (feature === 'prep') textContent = document.getElementById('aiPrepDetails').value;
+              else if (feature === 'reply') textContent = document.getElementById('aiReplyOutput').value;
+              
+              const res = await fetch(`/api/leads/${leadId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notes: textContent })
+              });
+              if (res.ok) {
+                alert('Saved successfully to Lead Notes!');
+              } else {
+                alert('Save failed.');
+              }
+            }
+          });
+        }
+      }
+
+      const aiFeaturesList = ['email', 'whatsapp', 'proposal', 'audit', 'score', 'prep', 'reply', 'call-script', 'followup', 'seo'];
+      aiFeaturesList.forEach(setupAiActionListeners);
+
+      // Lead Details AI Action Buttons Trigger
+      async function triggerLeadAI(feature, leadId) {
+        const outBox = document.getElementById('leadAiOutputBox');
+        outBox.style.display = 'block';
+        outBox.textContent = 'Generating AI response... Please wait.';
+        
+        try {
+          let endpoint = `/api/ai/${feature}`;
+          const payload = { lead_id: leadId };
+          
+          if (feature === 'reply-assistant') {
+            const objection = prompt("Enter customer objection or message to reply to:");
+            if (!objection) {
+              outBox.style.display = 'none';
+              return;
+            }
+            endpoint = '/api/ai/objection-reply';
+            payload.objection = objection;
+          } else if (feature === 'audit') {
+            endpoint = '/api/ai/website-audit';
+          } else if (feature === 'pitch') {
+            endpoint = '/api/ai/sales-pitch';
+          } else if (feature === 'score') {
+            endpoint = '/api/ai/lead-score';
+          } else if (feature === 'prep') {
+            endpoint = '/api/ai/meeting-prep';
+          }
+          
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Server error');
+          }
+          
+          const data = await res.json();
+          
+          if (feature === 'email') {
+            outBox.textContent = `Subject: ${data.subject}\n\nBody:\n${data.body}\n\nCTA: ${data.call_to_action}`;
+          } else if (feature === 'whatsapp') {
+            outBox.textContent = data.message;
+          } else if (feature === 'proposal') {
+            outBox.textContent = data.proposal;
+          } else if (feature === 'audit') {
+            outBox.textContent = `ISSUES:\n${(data.issues || []).map(i => '- ' + i).join('\n')}\n\nIMPROVEMENTS:\n${(data.improvements || []).map(i => '- ' + i).join('\n')}\n\nRECOMMENDATIONS:\n${(data.service_recommendations || []).map(i => '- ' + i).join('\n')}`;
+          } else if (feature === 'pitch') {
+            outBox.textContent = `Elevator Pitch:\n${data.elevator_pitch}\n\nLong Pitch:\n${data.long_pitch}`;
+          } else if (feature === 'score') {
+            outBox.textContent = `Score: ${data.score}/100\nPriority: ${data.priority}\nConfidence: ${data.confidence}\n\nReasoning:\n${data.reasoning}\n\nStrengths:\n${(data.strengths || []).join(', ')}\nWeaknesses:\n${(data.weaknesses || []).join(', ')}`;
+            if (confirm(`AI scored lead as ${data.score} (${data.priority}). Update CRM lead?`)) {
+              await fetch(`/api/leads/${leadId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ score: data.score, priority: data.priority })
+              });
+              loadLeads();
+            }
+          } else if (feature === 'prep') {
+            outBox.textContent = `Recommended Approach:\n${data.recommended_approach}\n\nTalking Points:\n${(data.talking_points || []).map(t => '- ' + t).join('\n')}\n\nQuestions to Ask:\n${(data.questions_to_ask || []).map(q => '- ' + q).join('\n')}`;
+          } else if (feature === 'reply-assistant') {
+            outBox.textContent = data.response;
+          } else if (feature === 'tags') {
+            outBox.textContent = `Suggested Tags: ${(data.tags || []).join(', ')}`;
+            if (data.tags && data.tags.length > 0) {
+              if (confirm(`Add tags to Lead Notes?`)) {
+                const lead = currentLeads.find(l => l.id === leadId);
+                const currentNotes = lead.notes || '';
+                const updatedNotes = `${currentNotes}\n\nCRM Tags: ${(data.tags || []).join(', ')}`;
+                await fetch(`/api/leads/${leadId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ notes: updatedNotes })
+                });
+                alert('Tags added to notes!');
+              }
+            }
+          } else if (feature === 'next-action') {
+            outBox.textContent = `Recommended Next Action: ${data.action}\n\nReasoning:\n${data.reasoning}`;
+          }
+        } catch (e) {
+          outBox.textContent = 'AI Generation failed: ' + e.message;
+        }
+      }
+
+      // Bulk AI Score
+      document.getElementById('btnBulkScore').addEventListener('click', async () => {
+        const leadsRes = await fetch('/api/leads').then(r => r.json());
+        const leads = leadsRes.leads || [];
+        if (leads.length === 0) {
+          alert('No leads available to score.');
+          return;
+        }
+        
+        if (!confirm(`Are you sure you want to AI Score all ${leads.length} leads? This will query Gemini sequentially with a 4-second delay to respect Free Tier limits.`)) {
+          return;
+        }
+        
+        const btnScore = document.getElementById('btnBulkScore');
+        const btnEmails = document.getElementById('btnBulkEmails');
+        const statusEl = document.getElementById('bulkStatusText');
+        
+        btnScore.disabled = true;
+        btnEmails.disabled = true;
+        statusEl.style.display = 'block';
+        
+        let successCount = 0;
+        
+        for (let i = 0; i < leads.length; i++) {
+          const lead = leads[i];
+          statusEl.textContent = `Scoring lead ${i + 1}/${leads.length}: ${lead.business_name}...`;
+          
+          try {
+            const res = await fetch('/api/ai/lead-score', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lead_id: lead.id, regenerate: false })
+            });
+            const data = await res.json();
+            if (data.score) {
+              // Update CRM lead
+              await fetch(`/api/leads/${lead.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ score: data.score, priority: data.priority, qualification_reason: data.reasoning })
+              });
+              successCount++;
+            }
+          } catch (err) {
+            console.error(`Bulk scoring failed for ${lead.business_name}:`, err.message);
+          }
+          
+          if (i < leads.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 4000));
+          }
+        }
+        
+        statusEl.textContent = `Completed! Scored ${successCount} leads successfully.`;
+        btnScore.disabled = false;
+        btnEmails.disabled = false;
+        loadLeads();
+      });
+
+      // Bulk AI Email Generation
+      document.getElementById('btnBulkEmails').addEventListener('click', async () => {
+        const leadsRes = await fetch('/api/leads').then(r => r.json());
+        const leads = leadsRes.leads || [];
+        if (leads.length === 0) {
+          alert('No leads available.');
+          return;
+        }
+        
+        if (!confirm(`Are you sure you want to generate email drafts for all ${leads.length} leads? Leads with existing drafts will be skipped. Sequential 4-second delay applies.`)) {
+          return;
+        }
+        
+        const btnScore = document.getElementById('btnBulkScore');
+        const btnEmails = document.getElementById('btnBulkEmails');
+        const statusEl = document.getElementById('bulkStatusText');
+        
+        btnScore.disabled = true;
+        btnEmails.disabled = true;
+        statusEl.style.display = 'block';
+        
+        let successCount = 0;
+        let skippedCount = 0;
+        
+        const tone = document.getElementById('aiToneSelect').value;
+        const lang = document.getElementById('aiLangSelect').value;
+        const service = document.getElementById('aiServiceInput').value;
+        
+        // Fetch all outreach messages to check for existing drafts
+        const existing = await fetch('/api/outreach/messages').then(r => r.json());
+        
+        for (let i = 0; i < leads.length; i++) {
+          const lead = leads[i];
+          
+          const hasDraft = existing.some(m => m.lead_id === lead.id);
+          if (hasDraft) {
+            skippedCount++;
+            continue;
+          }
+          
+          statusEl.textContent = `Drafting email ${i + 1}/${leads.length}: ${lead.business_name}...`;
+          
+          try {
+            const res = await fetch('/api/ai/email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lead_id: lead.id, tone, lang, service, regenerate: false })
+            });
+            const data = await res.json();
+            if (data.body) {
+              // Save to CRM as Draft
+              const saveRes = await fetch('/api/outreach/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  lead_id: lead.id,
+                  subject: data.subject || 'Outreach Pitch',
+                  body: data.body,
+                  channel: 'email'
+                })
+              });
+              if (saveRes.ok) successCount++;
+            }
+          } catch (err) {
+            console.error(`Bulk email draft failed for ${lead.business_name}:`, err.message);
+          }
+          
+          if (i < leads.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 4000));
+          }
+        }
+        
+        statusEl.textContent = `Completed! Generated ${successCount} drafts. Skipped ${skippedCount} existing.`;
+        btnScore.disabled = false;
+        btnEmails.disabled = false;
+        loadOutreachTab();
+      });
+
+      // Initialise App
+      fetchCurrentUser().then(authenticated => {
+        if (authenticated) {
+          fetchLeadStages().then(() => {
+            loadDashboard();
+          });
+        }
+      });
+    </script>
+  </body>
+</html>

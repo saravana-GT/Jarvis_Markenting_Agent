@@ -1,0 +1,32 @@
+{
+  "dentists_in_austin": {
+    "query": "Dentists",
+    "location": "Austin",
+    "sent": 10,
+    "delivered": 10,
+    "bounced": 0,
+    "open": 0,
+    "replied": 0,
+    "failed": 5,
+    "failed_reasons": [
+      "fetch failed",
+      "fetch failed",
+      "fetch failed",
+      "fetch failed",
+      "fetch failed"
+    ]
+  },
+  "dentists_in_salem": {
+    "query": "Dentists",
+    "location": "Salem",
+    "sent": 3,
+    "delivered": 3,
+    "bounced": 0,
+    "open": 0,
+    "replied": 0,
+    "failed": 1,
+    "failed_reasons": [
+      "fetch failed"
+    ]
+  }
+}
