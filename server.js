@@ -211,7 +211,9 @@ async function ensureDefaults() {
     ['target_locations', 'Local'], ['working_hours', '09:00-17:00'],
     ['meeting_availability', 'Monday-Friday'], ['service_packages', 'Starter, Growth, Premium'],
     ['notification_preferences', 'new_reply,follow_up_due,approval_required,payment_due'],
-    ['lead_scoring_rules', JSON.stringify(DEFAULT_SCORING_RULES)]
+    ['lead_scoring_rules', JSON.stringify(DEFAULT_SCORING_RULES)],
+    ['telegram_bot_token', ''],
+    ['telegram_chat_id', '']
   ];
 
   const existingKeys = new Set(store.settings.map(item => item.key));
@@ -228,6 +230,63 @@ async function ensureDefaults() {
     await db.insertRow('users', user);
     store.users.push(user);
   }
+}
+
+async function sendTelegramMessage(text) {
+  try {
+    let token = process.env.TELEGRAM_BOT_TOKEN;
+    let chatId = process.env.TELEGRAM_CHAT_ID;
+
+    const dbSettings = await db.findRows('settings');
+    const settingsMap = Object.fromEntries(dbSettings.map(item => [item.key, item.value]));
+
+    if (!token && settingsMap['telegram_bot_token']) {
+      token = settingsMap['telegram_bot_token'];
+    }
+    if (!chatId && settingsMap['telegram_chat_id']) {
+      chatId = settingsMap['telegram_chat_id'];
+    }
+
+    if (!token || !chatId || token.trim() === '' || chatId.trim() === '') {
+      return;
+    }
+
+    const url = `https://api.telegram.org/bot${token.trim()}/sendMessage`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId.trim(),
+        text: text,
+        parse_mode: 'HTML'
+      })
+    });
+    if (!res.ok) {
+      console.error('[server] Telegram API error:', await res.text());
+    }
+  } catch (err) {
+    console.error('[server] Failed to send Telegram message:', err.message);
+  }
+}
+
+async function createNotification(type, title, message, entityType = null, entityId = null) {
+  const now = new Date().toISOString();
+  const notification = {
+    id: uuidv4(),
+    user_id: null,
+    type,
+    title,
+    message,
+    entity_type: entityType,
+    entity_id: entityId,
+    is_read: false,
+    created_at: now
+  };
+  await db.insertRow('notifications', notification);
+  
+  const telegramText = `🔔 <b>${title}</b>\n\n${message}`;
+  await sendTelegramMessage(telegramText);
+  return notification;
 }
 
 function getDashboardStats() {
@@ -1575,7 +1634,7 @@ app.post('/api/meetings', requireAuth, async (req, res) => {
   }
   await logActivity('Meeting created', 'Meeting', meeting.id, `Meeting scheduled with ${lead.business_name}: ${meeting.title}`);
   // Create notification
-  await db.insertRow('notifications', { id: uuidv4(), user_id: null, type: 'meeting', title: 'Meeting Scheduled', message: `Meeting with ${lead.business_name} at ${scheduled_at}`, entity_type: 'Meeting', entity_id: meeting.id, is_read: false, created_at: now });
+  await createNotification('meeting', 'Meeting Scheduled', `Meeting with ${lead.business_name} at ${scheduled_at}`, 'Meeting', meeting.id);
   res.json({ success: true, meeting });
 });
 
@@ -1604,8 +1663,7 @@ app.post('/api/leads/:id/escalate', requireAuth, async (req, res) => {
   const escalationReason = validReasons.includes(reason) ? reason : 'manual_escalation';
   await db.updateRow('leads', req.params.id, { stage: 'MEETING_REQUIRED', updated_at: new Date().toISOString() });
   await db.insertRow('lead_stage_history', { id: uuidv4(), lead_id: lead.id, stage: 'MEETING_REQUIRED', changed_at: new Date().toISOString(), notes: escalationReason, created_at: new Date().toISOString() });
-  await logActivity('Meeting escalated', 'Lead', lead.id, `Meeting required: ${escalationReason} for ${lead.business_name}`);
-  await db.insertRow('notifications', { id: uuidv4(), user_id: null, type: 'escalation', title: 'Meeting Escalation', message: `${lead.business_name}: ${escalationReason}`, entity_type: 'Lead', entity_id: lead.id, is_read: false, created_at: new Date().toISOString() });
+  await createNotification('escalation', 'Meeting Escalation', `${lead.business_name}: ${escalationReason}`, 'Lead', lead.id);
   res.json({ success: true, reason: escalationReason });
 });
 
@@ -1920,8 +1978,7 @@ app.post('/api/approvals', requireAuth, async (req, res) => {
   const now = new Date().toISOString();
   const approval = { id: uuidv4(), entity_type, entity_id, reason: reason || '', status: 'PENDING', requested_at: now, decided_at: null, decided_by: null, notes: '', created_at: now, updated_at: now };
   await db.insertRow('approvals', approval);
-  await logActivity('Approval requested', 'Approval', approval.id, `Approval requested for ${entity_type} ${entity_id}`);
-  await db.insertRow('notifications', { id: uuidv4(), user_id: null, type: 'approval', title: 'Approval Required', message: `${entity_type} requires approval: ${reason}`, entity_type: 'Approval', entity_id: approval.id, is_read: false, created_at: now });
+  await createNotification('approval', 'Approval Required', `${entity_type} requires approval: ${reason}`, 'Approval', approval.id);
   res.json({ success: true, approval });
 });
 
@@ -1965,7 +2022,7 @@ app.post('/api/payments', requireAuth, async (req, res) => {
   await db.insertRow('payments', payment);
   await logActivity('Payment created', 'Payment', payment.id, `Payment tracked: $${totalAmt} (advance: $${advanceAmt})`);
   if (status === 'ADVANCE_PENDING' || status === 'PARTIALLY_PAID') {
-    await db.insertRow('notifications', { id: uuidv4(), user_id: null, type: 'payment_due', title: 'Payment Due', message: `Balance of $${balanceAmt} pending`, entity_type: 'Payment', entity_id: payment.id, is_read: false, created_at: now });
+    await createNotification('payment_due', 'Payment Due', `Balance of $${balanceAmt} pending`, 'Payment', payment.id);
   }
   res.json({ success: true, payment });
 });
@@ -2061,7 +2118,7 @@ app.post('/api/maintenance-plans', requireAuth, async (req, res) => {
   const plan = { id: uuidv4(), project_id, lead_id: lead_id || null, plan_name: plan_name || 'Basic Maintenance', description: description || '', monthly_cost: Number(monthly_cost || 0), annual_cost: Number(annual_cost || 0), includes: includes || [], status: 'ACTIVE', start_date: start_date || now, renewal_date: renewal_date || null, metadata: {}, created_at: now, updated_at: now };
   await db.insertRow('maintenance_plans', plan);
   if (renewal_date) {
-    await db.insertRow('notifications', { id: uuidv4(), user_id: null, type: 'maintenance_renewal', title: 'Maintenance Renewal', message: `Maintenance renewal for project ${project_id} on ${renewal_date}`, entity_type: 'MaintenancePlan', entity_id: plan.id, is_read: false, created_at: now });
+    await createNotification('maintenance_renewal', 'Maintenance Renewal', `Maintenance renewal for project ${project_id} on ${renewal_date}`, 'MaintenancePlan', plan.id);
   }
   await logActivity('Maintenance plan created', 'MaintenancePlan', plan.id, `Maintenance plan: ${plan.plan_name}`);
   res.json({ success: true, plan });
@@ -2523,7 +2580,7 @@ app.post('/api/gmail/sync', requireAuth, async (req, res) => {
 
         await db.insertRow('conversations', convo);
         await logActivity('Reply received (Synced)', 'Conversation', convo.id, `Real email reply synced from ${from} for lead ${leadId}`);
-        
+        await createNotification('new_reply', 'New Lead Reply Synced', `Received email reply from ${from}: "${convo.body.slice(0, 150)}..."`, 'Conversation', convo.id);
         syncedCount++;
       }
     }

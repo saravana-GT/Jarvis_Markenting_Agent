@@ -886,6 +886,14 @@
                   <button class="secondary" type="button" id="btnToggleGeminiVisibility" style="padding: 0 12px; margin: 0;">Show</button>
                 </div>
               </div>
+              <div class="form-group">
+                <label>Telegram Bot Token</label>
+                <input type="password" name="telegram_bot_token" placeholder="Bot Token from @BotFather" />
+              </div>
+              <div class="form-group">
+                <label>Telegram Chat ID</label>
+                <input type="text" name="telegram_chat_id" placeholder="Chat ID from @userinfobot" />
+              </div>
               <div style="display: flex; gap: 10px; margin-top: 15px;">
                 <button class="primary" type="submit" style="flex: 1;">Save Settings</button>
                 <button class="secondary" type="button" id="btnTestGeminiConnection" style="flex: 1; margin: 0;">Test Connection</button>
@@ -2576,6 +2584,8 @@
         genForm.max_follow_ups.value = settings.max_follow_ups || 4;
         genForm.minimum_acceptable_price.value = settings.minimum_acceptable_price || 500;
         genForm.gemini_api_key.value = settings.gemini_api_key || '';
+        genForm.telegram_bot_token.value = settings.telegram_bot_token || '';
+        genForm.telegram_chat_id.value = settings.telegram_chat_id || '';
       }
 
       document.getElementById('settingsScoringForm').addEventListener('submit', async (e) => {
