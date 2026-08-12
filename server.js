@@ -3262,7 +3262,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
       }
 
       if (i < drafts.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 8000));
+        await new Promise(resolve => setTimeout(resolve, 40000));
       }
     }
 
