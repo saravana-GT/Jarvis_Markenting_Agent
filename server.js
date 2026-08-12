@@ -2788,7 +2788,12 @@ const cityTimezones = {
   'san francisco': 'America/Los_Angeles', 'las vegas': 'America/Los_Angeles', 'portland': 'America/Los_Angeles',
   'san jose': 'America/Los_Angeles',
   'chennai': 'Asia/Kolkata', 'bangalore': 'Asia/Kolkata', 'coimbatore': 'Asia/Kolkata',
-  'madurai': 'Asia/Kolkata', 'trichy': 'Asia/Kolkata', 'erode': 'Asia/Kolkata', 'salem': 'Asia/Kolkata'
+  'madurai': 'Asia/Kolkata', 'trichy': 'Asia/Kolkata', 'erode': 'Asia/Kolkata', 'salem': 'Asia/Kolkata',
+  'london': 'Europe/London',
+  'sydney': 'Australia/Sydney', 'melbourne': 'Australia/Melbourne', 'brisbane': 'Australia/Brisbane',
+  'toronto': 'America/Toronto', 'vancouver': 'America/Vancouver',
+  'dubai': 'Asia/Dubai', 'abu dhabi': 'Asia/Dubai',
+  'singapore': 'Asia/Singapore'
 };
 
 function getCityHour(city) {
@@ -2934,7 +2939,7 @@ async function executeOverdueJobs() {
   return successCount;
 }
 
-async function runAutopilotWorkflow(limit, randomize = false) {
+async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = null) {
   const telegramLog = async (msg) => {
     console.log(`[Autopilot Backend] ${msg}`);
     await sendTelegramMessage(`🤖 ${msg}`);
@@ -2947,26 +2952,28 @@ async function runAutopilotWorkflow(limit, randomize = false) {
     const defaultLocations = ['Austin', 'Seattle', 'Denver', 'Boston', 'Chicago', 'Miami', 'Atlanta', 'Dallas', 'Phoenix', 'Houston', 'San Diego', 'Philadelphia'];
 
     let query = defaultIndustries[Math.floor(Math.random() * defaultIndustries.length)];
-    let location = defaultLocations[Math.floor(Math.random() * defaultLocations.length)];
-    let selectionReason = 'randomized';
+    let location = forcedLocation || defaultLocations[Math.floor(Math.random() * defaultLocations.length)];
+    let selectionReason = forcedLocation ? 'timezone scheduling' : 'randomized';
 
     if (!randomize) {
-      await telegramLog('Smart Campaign Selection running...');
       const dbSettings = await db.findRows('settings');
       const settings = Object.fromEntries(dbSettings.map(item => [item.key, item.value]));
-
       const targetIndustries = settings.target_industries ? settings.target_industries.split(',').map(i => i.trim()).filter(Boolean) : defaultIndustries;
-      const targetLocations = settings.target_locations ? settings.target_locations.split(',').map(l => l.trim()).filter(Boolean) : defaultLocations;
 
-      const { active, closed } = filterLocationsByBusinessHours(targetLocations);
-      let candidateLocations = targetLocations;
-
-      if (active.length > 0) {
-        candidateLocations = active.map(a => a.name);
-        await telegramLog(`☀️ <b>Active Timezone Routing:</b> Prioritized active cities: ${active.map(a => `${a.name} (${a.hour}:00)`).join(', ')}`);
+      if (forcedLocation) {
+        query = targetIndustries[Math.floor(Math.random() * targetIndustries.length)];
       } else {
-        await telegramLog(`🌙 <b>No cities currently in active business hours (9 AM - 5 PM).</b> Proceeding with all: ${closed.map(c => `${c.name} (${c.hour}:00)`).join(', ')}`);
-      }
+        await telegramLog('Smart Campaign Selection running...');
+        const targetLocations = settings.target_locations ? settings.target_locations.split(',').map(l => l.trim()).filter(Boolean) : defaultLocations;
+        const { active, closed } = filterLocationsByBusinessHours(targetLocations);
+        let candidateLocations = targetLocations;
+
+        if (active.length > 0) {
+          candidateLocations = active.map(a => a.name);
+          await telegramLog(`☀️ <b>Active Timezone Routing:</b> Prioritized active cities: ${active.map(a => `${a.name} (${a.hour}:00)`).join(', ')}`);
+        } else {
+          await telegramLog(`🌙 <b>No cities currently in active business hours (9 AM - 5 PM).</b> Proceeding with all: ${closed.map(c => `${c.name} (${c.hour}:00)`).join(', ')}`);
+        }
 
       let bestCombo = null;
       let bestReplyRate = 0;
@@ -2995,6 +3002,7 @@ async function runAutopilotWorkflow(limit, randomize = false) {
         selectionReason = 'cold_start';
       }
     }
+  }
 
     await telegramLog(`🎯 <b>Campaign parameters selected:</b>\nQuery: <code>${query}</code>\nLocation: <code>${location}</code>\nSelection: <i>${selectionReason}</i>`);
 
@@ -3456,19 +3464,29 @@ async function startServer() {
       }, 5 * 60 * 1000);
       console.log('[server] Background Job scheduler & Gmail sync active (5m interval)');
 
-      // Automatically run Autopilot Campaign once a day in the background
+      // Automatically run Autopilot Campaign based on city timezones (checks every 10 minutes)
       setInterval(async () => {
         try {
           const now = new Date();
-          if (now.getHours() === 10 && now.getMinutes() < 10) {
-            console.log('[Scheduler] Running daily scheduled Autopilot Campaign...');
-            await runAutopilotWorkflow(5, false);
+          // Only check at the start of the hour
+          if (now.getMinutes() < 10) {
+            const dbSettings = await db.findRows('settings');
+            const settings = Object.fromEntries(dbSettings.map(item => [item.key, item.value]));
+            const targetLocations = settings.target_locations ? settings.target_locations.split(',').map(l => l.trim()).filter(Boolean) : ['Local'];
+            
+            for (const loc of targetLocations) {
+              const localHour = getCityHour(loc);
+              if (localHour === 10) {
+                console.log(`[Scheduler] It is 10:00 AM in ${loc}. Launching scheduled Autopilot Campaign...`);
+                await runAutopilotWorkflow(5, false, loc);
+              }
+            }
           }
         } catch (err) {
-          console.error('[Scheduler] Scheduled autopilot run failed:', err.message);
+          console.error('[Scheduler] Timezone scheduled autopilot check failed:', err.message);
         }
       }, 10 * 60 * 1000); // Check every 10 minutes
-      console.log('[server] Daily Scheduled Autopilot active (runs at 10 AM)');
+      console.log('[server] Timezone-aware Daily Autopilot active (triggers at 10 AM local city time)');
     }
   } catch (err) {
     console.error('[server] Startup error:', err.message);
