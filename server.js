@@ -3326,10 +3326,50 @@ async function pollTelegramBot() {
             }
           }, 100);
         } else if (text === '/status') {
-          const stats = await getDashboardStats();
-          await sendTelegramMessage(`📊 <b>WebCloserAI Status:</b>\nTotal Leads: ${stats.totalLeads}\nContacted: ${stats.contactedLeads}\nInterested: ${stats.interestedClients}\nMeetings Booked: ${stats.meetingsBooked || 0}`);
+          try {
+            const tokens = await db.findRows('oauth_tokens', { provider: 'gmail' });
+            const activeEmails = tokens.map(t => t.user_id);
+            const messages = await db.findRows('outreach_messages');
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const sentToday = messages.filter(m => m.status === 'SENT' && m.sent_at && m.sent_at.slice(0, 10) === todayStr).length;
+            const conversations = await db.findRows('conversations');
+            const totalReplies = conversations.filter(c => c.direction === 'inbound').length;
+            const leads = await db.findRows('leads');
+
+            const statusMsg = `📊 <b>System Status Summary:</b>\n\n` +
+              `📬 <b>Active Inboxes (${activeEmails.length}):</b>\n` +
+              (activeEmails.length > 0 ? activeEmails.map(e => `• <code>${e}</code>`).join('\n') : `❌ None connected`) + `\n\n` +
+              `📨 <b>Sent Today:</b> <code>${sentToday}</code> emails\n` +
+              `📥 <b>Total Replies Synced:</b> <code>${totalReplies}</code> replies\n` +
+              `📈 <b>Total Database Leads:</b> <code>${leads.length}</code> leads`;
+            await sendTelegramMessage(statusMsg);
+          } catch (err) {
+            await sendTelegramMessage(`❌ <b>Status Error:</b> ${err.message}`);
+          }
+        } else if (text === '/leads') {
+          try {
+            const leads = await db.findRows('leads');
+            const pendingLeads = leads.filter(l => ['NEW', 'QUALIFIED', 'CONTACT_READY'].includes(l.stage));
+            pendingLeads.sort((a, b) => (b.score || 0) - (a.score || 0));
+            
+            const topLeads = pendingLeads.slice(0, 5);
+            if (topLeads.length === 0) {
+              await sendTelegramMessage(`🎯 <b>Hot Leads:</b>\nNo pending leads waiting for pitch in the queue.`);
+            } else {
+              const leadsList = topLeads.map((l, index) => {
+                return `${index + 1}. <b>${l.business_name}</b>\n` +
+                       `   • <b>Score:</b> <code>${l.score || 0}/100</code> (${l.priority || 'Medium'})\n` +
+                       `   • <b>Niche:</b> <code>${l.category || 'Local Business'}</code>\n` +
+                       `   • <b>Location:</b> <code>${l.location || 'Local'}</code>\n` +
+                       `   • <b>Website:</b> ${l.website && l.website !== 'None' ? l.website : '❌ None'}`;
+              }).join('\n\n');
+              await sendTelegramMessage(`🔥 <b>Top Hot Leads (Waiting for Pitch):</b>\n\n${leadsList}`);
+            }
+          } catch (err) {
+            await sendTelegramMessage(`❌ <b>Failed to fetch leads:</b> ${err.message}`);
+          }
         } else if (text === '/help' || text === '/start') {
-          await sendTelegramMessage(`🤖 <b>Available commands:</b>\n• <code>/autopilot [limit]</code> - Start smart autopilot (e.g. <code>/autopilot 5</code>)\n• <code>/followups</code> - Trigger pending follow-up emails\n• <code>/status</code> - View database stats\n• <code>/help</code> - Show commands`);
+          await sendTelegramMessage(`🤖 <b>Available commands:</b>\n• <code>/autopilot [limit]</code> - Start smart autopilot (e.g. <code>/autopilot 5</code>)\n• <code>/followups</code> - Trigger pending follow-up emails\n• <code>/status</code> - View detailed stats & active inboxes\n• <code>/leads</code> - View top 5 hot leads waiting to be pitched\n• <code>/help</code> - Show commands`);
         }
       }
     }
