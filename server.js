@@ -2397,7 +2397,9 @@ app.get('/api/gmail/status', requireAuth, async (req, res) => {
 app.get('/api/gmail/auth-url', requireAuth, (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return res.status(501).json({ error: 'GOOGLE_CLIENT_ID not configured' });
-  const redirectUri = `http://localhost:${PORT}/api/gmail/callback`;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.get('host');
+  const redirectUri = `${protocol}://${host}/api/gmail/callback`;
   const scopes = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.readonly'];
   const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes.join(' '))}&access_type=offline&prompt=consent`;
   res.json({ auth_url: url });
@@ -2407,9 +2409,12 @@ app.get('/api/gmail/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).send('Authorization code missing');
   try {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.get('host');
+    const redirectUri = `${protocol}://${host}/api/gmail/callback`;
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET, redirect_uri: `http://localhost:${PORT}/api/gmail/callback`, grant_type: 'authorization_code' })
+      body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET, redirect_uri: redirectUri, grant_type: 'authorization_code' })
     });
     const tokens = await response.json();
     if (tokens.error) return res.status(400).send(`OAuth error: ${tokens.error_description || tokens.error}`);
@@ -2626,7 +2631,9 @@ app.get('/api/calendar/status', requireAuth, async (req, res) => {
 app.get('/api/calendar/auth-url', requireAuth, (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return res.status(501).json({ error: 'GOOGLE_CLIENT_ID not configured' });
-  const redirectUri = `http://localhost:${PORT}/api/calendar/callback`;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.get('host');
+  const redirectUri = `${protocol}://${host}/api/calendar/callback`;
   const scopes = ['https://www.googleapis.com/auth/calendar'];
   const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes.join(' '))}&access_type=offline&prompt=consent`;
   res.json({ auth_url: url });
@@ -2636,9 +2643,12 @@ app.get('/api/calendar/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).send('Authorization code missing');
   try {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.get('host');
+    const redirectUri = `${protocol}://${host}/api/calendar/callback`;
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET, redirect_uri: `http://localhost:${PORT}/api/calendar/callback`, grant_type: 'authorization_code' })
+      body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET, redirect_uri: redirectUri, grant_type: 'authorization_code' })
     });
     const tokens = await response.json();
     if (tokens.error) return res.status(400).send(`OAuth error: ${tokens.error_description || tokens.error}`);
