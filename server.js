@@ -2512,183 +2512,192 @@ function getGmailMessageBody(payload) {
   return '';
 }
 
+async function runGmailSync() {
+  const tokens = await db.findRows('oauth_tokens', { provider: 'gmail' });
+  if (tokens.length === 0) {
+    return 0;
+  }
+
+  // 1. Fetch all outreach messages that are SENT to extract their thread_id
+  const sentMessages = await db.findRows('outreach_messages', { status: 'SENT' });
+  const activeThreads = new Map(); // thread_id -> lead_id
+  for (const msg of sentMessages) {
+    if (msg.metadata) {
+      try {
+        const meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+        if (meta && meta.thread_id) {
+          activeThreads.set(meta.thread_id, msg.lead_id);
+        }
+      } catch (e) {
+        // ignore parsing error
+      }
+    }
+  }
+
+  // 2. Fetch all leads to map their email addresses to lead_id
+  const leads = await db.findRows('leads');
+  const leadEmails = new Map(); // email -> lead_id
+  for (const lead of leads) {
+    if (lead.public_email) {
+      leadEmails.set(lead.public_email.toLowerCase().trim(), lead.id);
+    }
+  }
+
+  let totalSyncedCount = 0;
+
+  // Sync from all connected tokens
+  for (const tokenRow of tokens) {
+    try {
+      let accessToken = tokenRow.access_token;
+      const expiresAt = new Date(tokenRow.expires_at);
+      const now = new Date();
+      
+      // Refresh token if expired
+      if (expiresAt.getTime() - now.getTime() <= 60 * 1000) {
+        if (tokenRow.refresh_token) {
+          const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: process.env.GOOGLE_CLIENT_ID,
+              client_secret: process.env.GOOGLE_CLIENT_SECRET,
+              refresh_token: tokenRow.refresh_token,
+              grant_type: 'refresh_token'
+            })
+          });
+          if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json();
+            accessToken = refreshData.access_token;
+            const newExpiresAt = new Date(Date.now() + refreshData.expires_in * 1000).toISOString();
+            await db.updateRow('oauth_tokens', tokenRow.id, {
+              access_token: accessToken,
+              expires_at: newExpiresAt,
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
+      }
+
+      // Get this email's address
+      const profileRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      let userEmail = tokenRow.user_id.includes('@') ? tokenRow.user_id.toLowerCase().trim() : '';
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        userEmail = profile.emailAddress ? profile.emailAddress.toLowerCase().trim() : userEmail;
+      }
+
+      // Fetch recent messages
+      const listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100';
+      const listRes = await fetch(listUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (!listRes.ok) continue;
+
+      const listData = await listRes.json();
+      const messages = listData.messages || [];
+
+      const extractEmailFromHeader = (fromVal) => {
+        if (!fromVal) return '';
+        const match = fromVal.match(/<([^>]+)>/);
+        if (match) return match[1].toLowerCase().trim();
+        return fromVal.toLowerCase().trim();
+      };
+
+      for (const msgSummary of messages) {
+        const existing = await db.findRows('conversations', { external_id: msgSummary.id });
+        if (existing.length > 0) {
+          continue;
+        }
+
+        const detailUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgSummary.id}`;
+        const detailRes = await fetch(detailUrl, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!detailRes.ok) continue;
+
+        const msgDetail = await detailRes.json();
+        const headers = msgDetail.payload.headers || [];
+        const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject');
+        const fromHeader = headers.find(h => h.name.toLowerCase() === 'from');
+        const subject = subjectHeader ? subjectHeader.value : 'No Subject';
+        const from = fromHeader ? fromHeader.value : '';
+        const senderEmail = extractEmailFromHeader(from);
+
+        if (userEmail && senderEmail === userEmail) {
+          continue;
+        }
+
+        let leadId = null;
+        const threadId = msgSummary.threadId;
+
+        if (activeThreads.has(threadId)) {
+          leadId = activeThreads.get(threadId);
+        } else if (senderEmail && leadEmails.has(senderEmail)) {
+          leadId = leadEmails.get(senderEmail);
+        }
+
+        if (leadId) {
+          const body = getGmailMessageBody(msgDetail.payload);
+          const now = new Date().toISOString();
+          const convo = {
+            id: uuidv4(),
+            lead_id: leadId,
+            contact_id: null,
+            direction: 'inbound',
+            channel: 'email',
+            subject,
+            body: body || msgDetail.snippet || 'No body content',
+            external_id: msgSummary.id,
+            thread_id: threadId,
+            metadata: JSON.stringify({ from, labelIds: msgDetail.labelIds, synced_via: userEmail }),
+            created_at: msgDetail.internalDate ? new Date(Number(msgDetail.internalDate)).toISOString() : now
+          };
+
+          await db.insertRow('conversations', convo);
+          await logActivity('Reply received (Synced)', 'Conversation', convo.id, `Real email reply synced via ${userEmail} for lead ${leadId}`);
+          await createNotification('new_reply', 'New Lead Reply Synced', `Received email reply from ${from}: "${convo.body.slice(0, 150)}..."`, 'Conversation', convo.id);
+          totalSyncedCount++;
+        }
+      }
+    } catch (err) {
+      console.error(`[server] Sync failed for email ${tokenRow.user_id}:`, err.message);
+    }
+  }
+
+  // 5. Flag leads with no reply after 7 days as "FOLLOW_UP"
+  try {
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const contactedLeads = await db.findRows('leads', { stage: 'CONTACTED' });
+    for (const contactedLead of contactedLeads) {
+      if (contactedLead.last_contact_date && new Date(contactedLead.last_contact_date) < oneWeekAgo) {
+        const stageHistory = contactedLead.stage_history || [];
+        stageHistory.unshift({ stage: 'FOLLOW_UP', changed_at: new Date().toISOString() });
+        await db.updateRow('leads', contactedLead.id, {
+          stage: 'FOLLOW_UP',
+          stage_history: stageHistory,
+          updated_at: new Date().toISOString()
+        });
+        await logActivity('Follow-up due', 'Lead', contactedLead.id, `Lead ${contactedLead.business_name} has not replied in 7 days. Flagged for follow-up.`);
+      }
+    }
+  } catch (e) {
+    console.error('[server] Stale leads follow-up check failed:', e.message);
+  }
+
+  return totalSyncedCount;
+}
+
 app.post('/api/gmail/sync', requireAuth, async (req, res) => {
   try {
     const tokens = await db.findRows('oauth_tokens', { provider: 'gmail' });
     if (tokens.length === 0) {
       return res.status(400).json({ error: 'Gmail not connected. Please connect Gmail under Meetings/OAuth.' });
     }
-
-    // 1. Fetch all outreach messages that are SENT to extract their thread_id
-    const sentMessages = await db.findRows('outreach_messages', { status: 'SENT' });
-    const activeThreads = new Map(); // thread_id -> lead_id
-    for (const msg of sentMessages) {
-      if (msg.metadata) {
-        try {
-          const meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
-          if (meta && meta.thread_id) {
-            activeThreads.set(meta.thread_id, msg.lead_id);
-          }
-        } catch (e) {
-          // ignore parsing error
-        }
-      }
-    }
-
-    // 2. Fetch all leads to map their email addresses to lead_id
-    const leads = await db.findRows('leads');
-    const leadEmails = new Map(); // email -> lead_id
-    for (const lead of leads) {
-      if (lead.public_email) {
-        leadEmails.set(lead.public_email.toLowerCase().trim(), lead.id);
-      }
-    }
-
-    let totalSyncedCount = 0;
-
-    // Sync from all connected tokens
-    for (const tokenRow of tokens) {
-      try {
-        let accessToken = tokenRow.access_token;
-        const expiresAt = new Date(tokenRow.expires_at);
-        const now = new Date();
-        
-        // Refresh token if expired
-        if (expiresAt.getTime() - now.getTime() <= 60 * 1000) {
-          if (tokenRow.refresh_token) {
-            const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                client_id: process.env.GOOGLE_CLIENT_ID,
-                client_secret: process.env.GOOGLE_CLIENT_SECRET,
-                refresh_token: tokenRow.refresh_token,
-                grant_type: 'refresh_token'
-              })
-            });
-            if (refreshResponse.ok) {
-              const refreshData = await refreshResponse.json();
-              accessToken = refreshData.access_token;
-              const newExpiresAt = new Date(Date.now() + refreshData.expires_in * 1000).toISOString();
-              await db.updateRow('oauth_tokens', tokenRow.id, {
-                access_token: accessToken,
-                expires_at: newExpiresAt,
-                updated_at: new Date().toISOString()
-              });
-            }
-          }
-        }
-
-        // Get this email's address
-        const profileRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        let userEmail = tokenRow.user_id.includes('@') ? tokenRow.user_id.toLowerCase().trim() : '';
-        if (profileRes.ok) {
-          const profile = await profileRes.json();
-          userEmail = profile.emailAddress ? profile.emailAddress.toLowerCase().trim() : userEmail;
-        }
-
-        // Fetch recent messages
-        const listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100';
-        const listRes = await fetch(listUrl, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!listRes.ok) continue;
-
-        const listData = await listRes.json();
-        const messages = listData.messages || [];
-
-        const extractEmailFromHeader = (fromVal) => {
-          if (!fromVal) return '';
-          const match = fromVal.match(/<([^>]+)>/);
-          if (match) return match[1].toLowerCase().trim();
-          return fromVal.toLowerCase().trim();
-        };
-
-        for (const msgSummary of messages) {
-          const existing = await db.findRows('conversations', { external_id: msgSummary.id });
-          if (existing.length > 0) {
-            continue;
-          }
-
-          const detailUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgSummary.id}`;
-          const detailRes = await fetch(detailUrl, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-          });
-          if (!detailRes.ok) continue;
-
-          const msgDetail = await detailRes.json();
-          const headers = msgDetail.payload.headers || [];
-          const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject');
-          const fromHeader = headers.find(h => h.name.toLowerCase() === 'from');
-          const subject = subjectHeader ? subjectHeader.value : 'No Subject';
-          const from = fromHeader ? fromHeader.value : '';
-          const senderEmail = extractEmailFromHeader(from);
-
-          if (userEmail && senderEmail === userEmail) {
-            continue;
-          }
-
-          let leadId = null;
-          const threadId = msgSummary.threadId;
-
-          if (activeThreads.has(threadId)) {
-            leadId = activeThreads.get(threadId);
-          } else if (senderEmail && leadEmails.has(senderEmail)) {
-            leadId = leadEmails.get(senderEmail);
-          }
-
-          if (leadId) {
-            const body = getGmailMessageBody(msgDetail.payload);
-            const now = new Date().toISOString();
-            const convo = {
-              id: uuidv4(),
-              lead_id: leadId,
-              contact_id: null,
-              direction: 'inbound',
-              channel: 'email',
-              subject,
-              body: body || msgDetail.snippet || 'No body content',
-              external_id: msgSummary.id,
-              thread_id: threadId,
-              metadata: JSON.stringify({ from, labelIds: msgDetail.labelIds, synced_via: userEmail }),
-              created_at: msgDetail.internalDate ? new Date(Number(msgDetail.internalDate)).toISOString() : now
-            };
-
-            await db.insertRow('conversations', convo);
-            await logActivity('Reply received (Synced)', 'Conversation', convo.id, `Real email reply synced via ${userEmail} for lead ${leadId}`);
-            await createNotification('new_reply', 'New Lead Reply Synced', `Received email reply from ${from}: "${convo.body.slice(0, 150)}..."`, 'Conversation', convo.id);
-            totalSyncedCount++;
-          }
-        }
-      } catch (err) {
-        console.error(`[server] Sync failed for email ${tokenRow.user_id}:`, err.message);
-      }
-    }
-
-    // 5. Flag leads with no reply after 7 days as "FOLLOW_UP"
-    try {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const contactedLeads = await db.findRows('leads', { stage: 'CONTACTED' });
-      for (const contactedLead of contactedLeads) {
-        if (contactedLead.last_contact_date && new Date(contactedLead.last_contact_date) < oneWeekAgo) {
-          const stageHistory = contactedLead.stage_history || [];
-          stageHistory.unshift({ stage: 'FOLLOW_UP', changed_at: new Date().toISOString() });
-          await db.updateRow('leads', contactedLead.id, {
-            stage: 'FOLLOW_UP',
-            stage_history: stageHistory,
-            updated_at: new Date().toISOString()
-          });
-          await logActivity('Follow-up due', 'Lead', contactedLead.id, `Lead ${contactedLead.business_name} has not replied in 7 days. Flagged for follow-up.`);
-        }
-      }
-    } catch (e) {
-      console.error('[server] Stale leads follow-up check failed:', e.message);
-    }
-
-    res.json({ success: true, synced: totalSyncedCount, message: `Successfully synced ${totalSyncedCount} new replies.` });
+    const syncedCount = await runGmailSync();
+    res.json({ success: true, synced: syncedCount, message: `Successfully synced ${syncedCount} new replies.` });
   } catch (err) {
     console.error('[server] Gmail sync failed:', err.message);
     res.status(500).json({ error: `Gmail sync failed: ${err.message}` });
@@ -3391,15 +3400,20 @@ async function startServer() {
       setInterval(pollTelegramBot, 10000);
       console.log('[server] Telegram Bot polling active');
 
-      // Process overdue jobs (including follow-ups) every 5 minutes
+      // Process overdue jobs (including follow-ups) and sync Gmail replies every 5 minutes
       setInterval(async () => {
         try {
           await executeOverdueJobs();
         } catch (e) {
           console.error('[server] Background job processing failed:', e.message);
         }
+        try {
+          await runGmailSync();
+        } catch (e) {
+          console.error('[server] Background Gmail sync failed:', e.message);
+        }
       }, 5 * 60 * 1000);
-      console.log('[server] Background Job scheduler active (5m interval)');
+      console.log('[server] Background Job scheduler & Gmail sync active (5m interval)');
 
       // Automatically run Autopilot Campaign once a day in the background
       setInterval(async () => {
