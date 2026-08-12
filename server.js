@@ -3125,6 +3125,8 @@ async function runAutopilotWorkflow(limit, randomize = false) {
           } else {
             console.error('Gmail send error response:', await gmailRes.text());
           }
+        } else {
+          await telegramLog(`⚠️ <b>Gmail not connected:</b> Bypassed sending email to <code>${lead.public_email}</code>. Please link your Gmail account.`);
         }
       } catch (err) {
         console.error('Send execution failed:', err.message);
