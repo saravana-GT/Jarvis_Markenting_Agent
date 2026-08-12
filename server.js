@@ -2677,6 +2677,154 @@ app.get('/api/integrations/status', requireAuth, async (req, res) => {
   });
 });
 
+const cityTimezones = {
+  'new york': 'America/New_York', 'boston': 'America/New_York', 'miami': 'America/New_York',
+  'atlanta': 'America/New_York', 'philadelphia': 'America/New_York', 'charlotte': 'America/New_York',
+  'orlando': 'America/New_York', 'washington dc': 'America/New_York', 'washington': 'America/New_York',
+  'columbus': 'America/New_York', 'indianapolis': 'America/New_York', 'detroit': 'America/New_York',
+  'jacksonville': 'America/New_York',
+  'chicago': 'America/Chicago', 'dallas': 'America/Chicago', 'houston': 'America/Chicago',
+  'austin': 'America/Chicago', 'nashville': 'America/Chicago', 'fort worth': 'America/Chicago',
+  'san antonio': 'America/Chicago',
+  'denver': 'America/Denver', 'phoenix': 'America/Phoenix',
+  'seattle': 'America/Los_Angeles', 'los angeles': 'America/Los_Angeles', 'san diego': 'America/Los_Angeles',
+  'san francisco': 'America/Los_Angeles', 'las vegas': 'America/Los_Angeles', 'portland': 'America/Los_Angeles',
+  'san jose': 'America/Los_Angeles',
+  'chennai': 'Asia/Kolkata', 'bangalore': 'Asia/Kolkata', 'coimbatore': 'Asia/Kolkata',
+  'madurai': 'Asia/Kolkata', 'trichy': 'Asia/Kolkata', 'erode': 'Asia/Kolkata', 'salem': 'Asia/Kolkata'
+};
+
+function getCityHour(city) {
+  const tz = cityTimezones[city.toLowerCase().trim()] || 'America/New_York';
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: 'numeric',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(new Date());
+    const hourPart = parts.find(p => p.type === 'hour');
+    return hourPart ? parseInt(hourPart.value, 10) : new Date().getHours();
+  } catch (e) {
+    return new Date().getHours();
+  }
+}
+
+function filterLocationsByBusinessHours(locations) {
+  const active = [];
+  const closed = [];
+  for (const loc of locations) {
+    const hr = getCityHour(loc);
+    if (hr >= 9 && hr < 17) {
+      active.push({ name: loc, hour: hr });
+    } else {
+      closed.push({ name: loc, hour: hr });
+    }
+  }
+  return { active, closed };
+}
+
+async function executeOverdueJobs() {
+  const now = new Date().toISOString();
+  const pendingJobs = await db.findRows('jobs', { status: 'PENDING' });
+  const overdueJobs = pendingJobs.filter(j => j.scheduled_at <= now);
+
+  if (overdueJobs.length === 0) {
+    return 0;
+  }
+
+  console.log(`[Job Scheduler] Processing ${overdueJobs.length} overdue jobs...`);
+  let successCount = 0;
+
+  for (const job of overdueJobs) {
+    try {
+      await db.updateRow('jobs', job.id, { status: 'RUNNING', started_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+
+      if (job.type === 'follow_up') {
+        const { follow_up_id, lead_id } = job.payload;
+        const followUp = await db.findRow('follow_ups', follow_up_id);
+        const lead = await db.findRow('leads', lead_id);
+
+        if (followUp && lead && !lead.opt_out && lead.stage !== 'REPLIED' && lead.public_email) {
+          const followUpData = await aiService.generateFollowUp(lead.id, {
+            tone: 'Professional',
+            lang: 'English',
+            regenerate: false
+          });
+
+          let body = '';
+          if (followUp.sequence_number === 1) {
+            body = followUpData.first_followup;
+          } else if (followUp.sequence_number === 2) {
+            body = followUpData.second_followup;
+          } else {
+            body = followUpData.final_followup;
+          }
+
+          let accessToken = await getValidGmailToken();
+          if (accessToken) {
+            const subject = `Re: Quick suggestion: Web Optimization for ${lead.business_name}`;
+            const emailHeader = [
+              `To: ${lead.public_email}`,
+              `Subject: ${subject}`,
+              'Content-Type: text/html; charset=utf-8',
+              'MIME-Version: 1.0',
+              '',
+              body.replace(/\n/g, '<br>')
+            ].join('\n');
+
+            const base64Safe = Buffer.from(emailHeader).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            const gmailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
+            const gmailRes = await fetch(gmailUrl, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ raw: base64Safe })
+            });
+
+            if (gmailRes.ok) {
+              const resData = await gmailRes.json();
+              const sentTime = new Date().toISOString();
+              await db.updateRow('follow_ups', followUp.id, {
+                status: 'SENT',
+                sent_at: sentTime,
+                message_body: body,
+                result: JSON.stringify({ gmail_id: resData.id }),
+                updated_at: sentTime
+              });
+
+              await db.updateRow('leads', lead.id, { stage: 'FOLLOW_UP', last_contact_date: sentTime, updated_at: sentTime });
+              await db.insertRow('lead_stage_history', { id: uuidv4(), lead_id: lead.id, stage: 'FOLLOW_UP', changed_at: sentTime, created_at: sentTime });
+              await logActivity('Follow-up sent', 'FollowUp', followUp.id, `Sent follow-up #${followUp.sequence_number} to ${lead.public_email}`);
+              await sendTelegramMessage(`✉️ <b>Follow-up #${followUp.sequence_number} Sent!</b>\nLead: <b>${lead.business_name}</b>\nEmail: <code>${lead.public_email}</code>`);
+              
+              successCount++;
+            } else {
+              throw new Error(`Gmail send failed: ${await gmailRes.text()}`);
+            }
+          } else {
+            throw new Error('Gmail OAuth token not available/expired.');
+          }
+        } else {
+          await db.updateRow('follow_ups', followUp.id, { status: 'CANCELLED', updated_at: new Date().toISOString() });
+          await logActivity('Follow-up bypassed', 'FollowUp', followUp.id, `Bypassed follow-up because lead replied, opted out, or lacks email.`);
+        }
+      }
+
+      await db.updateRow('jobs', job.id, { status: 'COMPLETED', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+      await db.insertRow('job_executions', { id: uuidv4(), job_id: job.id, status: 'COMPLETED', started_at: job.started_at, completed_at: new Date().toISOString(), error: null, output: 'Success', created_at: new Date().toISOString() });
+    } catch (err) {
+      console.error(`[Job Scheduler] Job ${job.id} failed:`, err.message);
+      const retryCount = (job.retry_count || 0) + 1;
+      const status = retryCount >= (job.max_retries || 3) ? 'FAILED' : 'PENDING';
+      
+      await db.updateRow('jobs', job.id, { status, retry_count: retryCount, error: err.message, updated_at: new Date().toISOString() });
+      await db.insertRow('job_executions', { id: uuidv4(), job_id: job.id, status, started_at: job.started_at, completed_at: new Date().toISOString(), error: err.message, output: null, created_at: new Date().toISOString() });
+    }
+  }
+
+  return successCount;
+}
+
 async function runAutopilotWorkflow(limit, randomize = false) {
   const telegramLog = async (msg) => {
     console.log(`[Autopilot Backend] ${msg}`);
@@ -3044,11 +3192,21 @@ async function pollTelegramBot() {
               await sendTelegramMessage(`❌ <b>Autopilot Error:</b> ${err.message}`);
             }
           }, 100);
+        } else if (text.startsWith('/followups') || text.startsWith('/followup') || text.startsWith('/run_followups')) {
+          await sendTelegramMessage(`🔍 <b>Checking for pending follow-ups...</b>`);
+          setTimeout(async () => {
+            try {
+              const processed = await executeOverdueJobs();
+              await sendTelegramMessage(`✅ <b>Follow-up check complete!</b>\nProcessed and sent <b>${processed}</b> due follow-up emails.`);
+            } catch (err) {
+              await sendTelegramMessage(`❌ <b>Follow-up processing error:</b> ${err.message}`);
+            }
+          }, 100);
         } else if (text === '/status') {
           const stats = await getDashboardStats();
           await sendTelegramMessage(`📊 <b>WebCloserAI Status:</b>\nTotal Leads: ${stats.totalLeads}\nContacted: ${stats.contactedLeads}\nInterested: ${stats.interestedClients}\nMeetings Booked: ${stats.meetingsBooked || 0}`);
         } else if (text === '/help' || text === '/start') {
-          await sendTelegramMessage(`🤖 <b>Available commands:</b>\n• <code>/autopilot [limit]</code> - Start smart autopilot (e.g. <code>/autopilot 5</code>)\n• <code>/status</code> - View database stats\n• <code>/help</code> - Show commands`);
+          await sendTelegramMessage(`🤖 <b>Available commands:</b>\n• <code>/autopilot [limit]</code> - Start smart autopilot (e.g. <code>/autopilot 5</code>)\n• <code>/followups</code> - Trigger pending follow-up emails\n• <code>/status</code> - View database stats\n• <code>/help</code> - Show commands`);
         }
       }
     }
@@ -3118,6 +3276,16 @@ async function startServer() {
     if (require.main === module) {
       setInterval(pollTelegramBot, 10000);
       console.log('[server] Telegram Bot polling active');
+
+      // Process overdue jobs (including follow-ups) every 5 minutes
+      setInterval(async () => {
+        try {
+          await executeOverdueJobs();
+        } catch (e) {
+          console.error('[server] Background job processing failed:', e.message);
+        }
+      }, 5 * 60 * 1000);
+      console.log('[server] Background Job scheduler active (5m interval)');
     }
   } catch (err) {
     console.error('[server] Startup error:', err.message);
