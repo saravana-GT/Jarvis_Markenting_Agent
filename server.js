@@ -1195,20 +1195,27 @@ app.put('/api/outreach/messages/:id/approve', requireAuth, async (req, res) => {
   res.json({ success: true, message: updated });
 });
 
-async function getValidGmailToken() {
+let lastUsedTokenIndex = 0;
+async function getValidGmailToken(rotate = false) {
   const tokens = await db.findRows('oauth_tokens', { provider: 'gmail' }, 'created_at DESC');
   if (tokens.length === 0) return null;
-  const token = tokens[0];
+  
+  let tokenIdx = 0;
+  if (rotate && tokens.length > 1) {
+    lastUsedTokenIndex = (lastUsedTokenIndex + 1) % tokens.length;
+    tokenIdx = lastUsedTokenIndex;
+  }
+  const token = tokens[tokenIdx];
   
   const expiresAt = new Date(token.expires_at);
   const now = new Date();
   if (expiresAt.getTime() - now.getTime() > 60 * 1000) {
-    return token.access_token;
+    return { accessToken: token.access_token, email: token.user_id };
   }
   
-  console.log('[server] Gmail access token expired, attempting refresh...');
+  console.log(`[server] Gmail access token for ${token.user_id} expired, attempting refresh...`);
   if (!token.refresh_token) {
-    throw new Error('Access token is expired and no refresh token is available.');
+    throw new Error(`Access token for ${token.user_id} is expired and no refresh token is available.`);
   }
   
   const response = await fetch('https://oauth2.googleapis.com/token', {
@@ -1224,7 +1231,7 @@ async function getValidGmailToken() {
   
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Failed to refresh Google OAuth token: ${errText}`);
+    throw new Error(`Failed to refresh Google OAuth token for ${token.user_id}: ${errText}`);
   }
   
   const data = await response.json();
@@ -1237,8 +1244,8 @@ async function getValidGmailToken() {
     updated_at: new Date().toISOString()
   });
   
-  console.log('[server] Gmail access token refreshed successfully.');
-  return newAccessToken;
+  console.log(`[server] Gmail access token for ${token.user_id} refreshed successfully.`);
+  return { accessToken: newAccessToken, email: token.user_id };
 }
 
 async function transitionLeadToContacted(leadId) {
@@ -1277,8 +1284,13 @@ app.put('/api/outreach/messages/:id/send', requireAuth, async (req, res) => {
   if (!['QUEUED', 'DRAFT', 'FAILED'].includes(msg.status)) return res.status(400).json({ error: 'Message is not in sendable state' });
   
   let accessToken = null;
+  let senderEmail = '';
   try {
-    accessToken = await getValidGmailToken();
+    const tokenInfo = await getValidGmailToken(true);
+    if (tokenInfo) {
+      accessToken = tokenInfo.accessToken;
+      senderEmail = tokenInfo.email;
+    }
   } catch (refreshErr) {
     console.error('[server] Failed to refresh Gmail token:', refreshErr.message);
     return res.status(500).json({ error: `Gmail authentication error: ${refreshErr.message}` });
@@ -1414,13 +1426,14 @@ app.put('/api/outreach/messages/:id/send', requireAuth, async (req, res) => {
         
         // Construct MIME email
         const rawMessage = [
+          senderEmail ? `From: ${senderEmail}` : '',
           `To: ${toEmail}`,
           `Subject: ${subject}`,
           'Content-Type: text/html; charset=utf-8',
           'MIME-Version: 1.0',
           '',
           body.replace(/\n/g, '<br>')
-        ].join('\r\n');
+        ].filter(Boolean).join('\r\n');
 
         const encodedMessage = Buffer.from(rawMessage)
           .toString('base64')
@@ -2403,7 +2416,11 @@ app.get('/api/gmail/auth-url', requireAuth, (req, res) => {
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
   const host = req.get('host');
   const redirectUri = `${protocol}://${host}/api/gmail/callback`;
-  const scopes = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.readonly'];
+  const scopes = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/userinfo.email'
+  ];
   const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes.join(' '))}&access_type=offline&prompt=consent`;
   res.json({ auth_url: url });
 });
@@ -2421,7 +2438,44 @@ app.get('/api/gmail/callback', async (req, res) => {
     });
     const tokens = await response.json();
     if (tokens.error) return res.status(400).send(`OAuth error: ${tokens.error_description || tokens.error}`);
-    await db.insertRow('oauth_tokens', { id: uuidv4(), user_id: req.session?.userId || 'owner', provider: 'gmail', access_token: tokens.access_token, refresh_token: tokens.refresh_token || '', token_type: tokens.token_type, expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(), scope: tokens.scope || '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    
+    let googleEmail = 'owner';
+    try {
+      const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { 'Authorization': `Bearer ${tokens.access_token}` }
+      });
+      if (userinfoRes.ok) {
+        const profile = await userinfoRes.json();
+        googleEmail = profile.email || 'owner';
+      }
+    } catch (err) {
+      console.error('[server] Failed to fetch google userinfo:', err.message);
+    }
+
+    const now = new Date().toISOString();
+    const existing = await db.findRows('oauth_tokens', { provider: 'gmail', user_id: googleEmail });
+    if (existing.length > 0) {
+      await db.updateRow('oauth_tokens', existing[0].id, {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token || existing[0].refresh_token || '',
+        expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+        updated_at: now
+      });
+    } else {
+      await db.insertRow('oauth_tokens', {
+        id: uuidv4(),
+        user_id: googleEmail,
+        provider: 'gmail',
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token || '',
+        token_type: tokens.token_type,
+        expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+        scope: tokens.scope || '',
+        created_at: now,
+        updated_at: now
+      });
+    }
+
     res.send('<html><body><h2>Gmail connected successfully!</h2><p>You can close this window.</p><script>setTimeout(()=>window.close(),2000)</script></body></html>');
   } catch (err) {
     res.status(500).send('OAuth callback failed: ' + err.message);
@@ -2459,19 +2513,9 @@ function getGmailMessageBody(payload) {
 
 app.post('/api/gmail/sync', requireAuth, async (req, res) => {
   try {
-    const accessToken = await getValidGmailToken();
-    if (!accessToken) {
+    const tokens = await db.findRows('oauth_tokens', { provider: 'gmail' });
+    if (tokens.length === 0) {
       return res.status(400).json({ error: 'Gmail not connected. Please connect Gmail under Meetings/OAuth.' });
-    }
-
-    // Get user's own email address to filter out sent emails
-    const profileRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    let userEmail = '';
-    if (profileRes.ok) {
-      const profile = await profileRes.json();
-      userEmail = profile.emailAddress ? profile.emailAddress.toLowerCase().trim() : '';
     }
 
     // 1. Fetch all outreach messages that are SENT to extract their thread_id
@@ -2499,99 +2543,129 @@ app.post('/api/gmail/sync', requireAuth, async (req, res) => {
       }
     }
 
-    // 3. Fetch recent messages from Gmail
-    const listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100';
-    const listRes = await fetch(listUrl, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
+    let totalSyncedCount = 0;
 
-    if (!listRes.ok) {
-      const errText = await listRes.text();
-      throw new Error(`Gmail API messages list failed: ${errText}`);
-    }
+    // Sync from all connected tokens
+    for (const tokenRow of tokens) {
+      try {
+        let accessToken = tokenRow.access_token;
+        const expiresAt = new Date(tokenRow.expires_at);
+        const now = new Date();
+        
+        // Refresh token if expired
+        if (expiresAt.getTime() - now.getTime() <= 60 * 1000) {
+          if (tokenRow.refresh_token) {
+            const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                client_id: process.env.GOOGLE_CLIENT_ID,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET,
+                refresh_token: tokenRow.refresh_token,
+                grant_type: 'refresh_token'
+              })
+            });
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
+              accessToken = refreshData.access_token;
+              const newExpiresAt = new Date(Date.now() + refreshData.expires_in * 1000).toISOString();
+              await db.updateRow('oauth_tokens', tokenRow.id, {
+                access_token: accessToken,
+                expires_at: newExpiresAt,
+                updated_at: new Date().toISOString()
+              });
+            }
+          }
+        }
 
-    const listData = await listRes.json();
-    const messages = listData.messages || [];
+        // Get this email's address
+        const profileRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        let userEmail = tokenRow.user_id.includes('@') ? tokenRow.user_id.toLowerCase().trim() : '';
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          userEmail = profile.emailAddress ? profile.emailAddress.toLowerCase().trim() : userEmail;
+        }
 
-    let syncedCount = 0;
+        // Fetch recent messages
+        const listUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100';
+        const listRes = await fetch(listUrl, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!listRes.ok) continue;
 
-    // Helper to extract email from From header value (e.g. "Name <email@domain.com>")
-    const extractEmailFromHeader = (fromVal) => {
-      if (!fromVal) return '';
-      const match = fromVal.match(/<([^>]+)>/);
-      if (match) return match[1].toLowerCase().trim();
-      return fromVal.toLowerCase().trim();
-    };
+        const listData = await listRes.json();
+        const messages = listData.messages || [];
 
-    // 4. For each message, check if it belongs to a lead
-    for (const msgSummary of messages) {
-      // Check if we already imported this message
-      const existing = await db.findRows('conversations', { external_id: msgSummary.id });
-      if (existing.length > 0) {
-        continue; // Already synced
-      }
-
-      // Fetch detailed message content
-      const detailUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgSummary.id}`;
-      const detailRes = await fetch(detailUrl, {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
-
-      if (!detailRes.ok) {
-        console.error(`[server] Failed to fetch message detail for ${msgSummary.id}:`, await detailRes.text());
-        continue;
-      }
-
-      const msgDetail = await detailRes.json();
-      
-      // Extract headers
-      const headers = msgDetail.payload.headers || [];
-      const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject');
-      const fromHeader = headers.find(h => h.name.toLowerCase() === 'from');
-      
-      const subject = subjectHeader ? subjectHeader.value : 'No Subject';
-      const from = fromHeader ? fromHeader.value : '';
-      const senderEmail = extractEmailFromHeader(from);
-
-      // Skip if the message was sent by the user themselves
-      if (userEmail && senderEmail === userEmail) {
-        continue;
-      }
-
-      // Determine which lead this message belongs to
-      let leadId = null;
-      const threadId = msgSummary.threadId;
-
-      if (activeThreads.has(threadId)) {
-        leadId = activeThreads.get(threadId);
-      } else if (senderEmail && leadEmails.has(senderEmail)) {
-        leadId = leadEmails.get(senderEmail);
-      }
-
-      // If it belongs to a valid lead, import it!
-      if (leadId) {
-        const body = getGmailMessageBody(msgDetail.payload);
-        const now = new Date().toISOString();
-        const convo = {
-          id: uuidv4(),
-          lead_id: leadId,
-          contact_id: null,
-          direction: 'inbound',
-          channel: 'email',
-          subject,
-          body: body || msgDetail.snippet || 'No body content',
-          external_id: msgSummary.id,
-          thread_id: threadId,
-          metadata: JSON.stringify({ from, labelIds: msgDetail.labelIds }),
-          created_at: msgDetail.internalDate ? new Date(Number(msgDetail.internalDate)).toISOString() : now
+        const extractEmailFromHeader = (fromVal) => {
+          if (!fromVal) return '';
+          const match = fromVal.match(/<([^>]+)>/);
+          if (match) return match[1].toLowerCase().trim();
+          return fromVal.toLowerCase().trim();
         };
 
-        await db.insertRow('conversations', convo);
-        await logActivity('Reply received (Synced)', 'Conversation', convo.id, `Real email reply synced from ${from} for lead ${leadId}`);
-        await createNotification('new_reply', 'New Lead Reply Synced', `Received email reply from ${from}: "${convo.body.slice(0, 150)}..."`, 'Conversation', convo.id);
-        syncedCount++;
+        for (const msgSummary of messages) {
+          const existing = await db.findRows('conversations', { external_id: msgSummary.id });
+          if (existing.length > 0) {
+            continue;
+          }
+
+          const detailUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgSummary.id}`;
+          const detailRes = await fetch(detailUrl, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          if (!detailRes.ok) continue;
+
+          const msgDetail = await detailRes.json();
+          const headers = msgDetail.payload.headers || [];
+          const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject');
+          const fromHeader = headers.find(h => h.name.toLowerCase() === 'from');
+          const subject = subjectHeader ? subjectHeader.value : 'No Subject';
+          const from = fromHeader ? fromHeader.value : '';
+          const senderEmail = extractEmailFromHeader(from);
+
+          if (userEmail && senderEmail === userEmail) {
+            continue;
+          }
+
+          let leadId = null;
+          const threadId = msgSummary.threadId;
+
+          if (activeThreads.has(threadId)) {
+            leadId = activeThreads.get(threadId);
+          } else if (senderEmail && leadEmails.has(senderEmail)) {
+            leadId = leadEmails.get(senderEmail);
+          }
+
+          if (leadId) {
+            const body = getGmailMessageBody(msgDetail.payload);
+            const now = new Date().toISOString();
+            const convo = {
+              id: uuidv4(),
+              lead_id: leadId,
+              contact_id: null,
+              direction: 'inbound',
+              channel: 'email',
+              subject,
+              body: body || msgDetail.snippet || 'No body content',
+              external_id: msgSummary.id,
+              thread_id: threadId,
+              metadata: JSON.stringify({ from, labelIds: msgDetail.labelIds, synced_via: userEmail }),
+              created_at: msgDetail.internalDate ? new Date(Number(msgDetail.internalDate)).toISOString() : now
+            };
+
+            await db.insertRow('conversations', convo);
+            await logActivity('Reply received (Synced)', 'Conversation', convo.id, `Real email reply synced via ${userEmail} for lead ${leadId}`);
+            await createNotification('new_reply', 'New Lead Reply Synced', `Received email reply from ${from}: "${convo.body.slice(0, 150)}..."`, 'Conversation', convo.id);
+            totalSyncedCount++;
+          }
+        }
+      } catch (err) {
+        console.error(`[server] Sync failed for email ${tokenRow.user_id}:`, err.message);
       }
     }
+
     // 5. Flag leads with no reply after 7 days as "FOLLOW_UP"
     try {
       const oneWeekAgo = new Date();
@@ -2613,7 +2687,7 @@ app.post('/api/gmail/sync', requireAuth, async (req, res) => {
       console.error('[server] Stale leads follow-up check failed:', e.message);
     }
 
-    res.json({ success: true, synced: syncedCount, message: `Successfully synced ${syncedCount} new replies.` });
+    res.json({ success: true, synced: totalSyncedCount, message: `Successfully synced ${totalSyncedCount} new replies.` });
   } catch (err) {
     console.error('[server] Gmail sync failed:', err.message);
     res.status(500).json({ error: `Gmail sync failed: ${err.message}` });
@@ -2774,17 +2848,29 @@ async function executeOverdueJobs() {
             body = followUpData.final_followup;
           }
 
-          let accessToken = await getValidGmailToken();
+          let accessToken = null;
+          let senderEmail = '';
+          try {
+            const tokenInfo = await getValidGmailToken(true);
+            if (tokenInfo) {
+              accessToken = tokenInfo.accessToken;
+              senderEmail = tokenInfo.email;
+            }
+          } catch (tokenErr) {
+            console.error('[server] Failed to get token for follow-up:', tokenErr.message);
+          }
+
           if (accessToken) {
             const subject = `Re: Quick suggestion: Web Optimization for ${lead.business_name}`;
             const emailHeader = [
+              senderEmail ? `From: ${senderEmail}` : '',
               `To: ${lead.public_email}`,
               `Subject: ${subject}`,
               'Content-Type: text/html; charset=utf-8',
               'MIME-Version: 1.0',
               '',
               body.replace(/\n/g, '<br>')
-            ].join('\n');
+            ].filter(Boolean).join('\n');
 
             const base64Safe = Buffer.from(emailHeader).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
             const gmailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
@@ -3099,16 +3185,28 @@ async function runAutopilotWorkflow(limit, randomize = false) {
       try {
         await db.updateRow('outreach_messages', message.id, { status: 'QUEUED', updated_at: new Date().toISOString() });
         
-        let accessToken = await getValidGmailToken();
+        let accessToken = null;
+        let senderEmail = '';
+        try {
+          const tokenInfo = await getValidGmailToken(true);
+          if (tokenInfo) {
+            accessToken = tokenInfo.accessToken;
+            senderEmail = tokenInfo.email;
+          }
+        } catch (tokenErr) {
+          console.error('[server] Failed to get token for autopilot send:', tokenErr.message);
+        }
+
         if (accessToken) {
           const emailHeader = [
+            senderEmail ? `From: ${senderEmail}` : '',
             `To: ${lead.public_email}`,
             `Subject: ${message.subject}`,
             'Content-Type: text/html; charset=utf-8',
             'MIME-Version: 1.0',
             '',
             message.body.replace(/\n/g, '<br>')
-          ].join('\n');
+          ].filter(Boolean).join('\n');
 
           const base64Safe = Buffer.from(emailHeader).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
           const gmailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
@@ -3301,6 +3399,20 @@ async function startServer() {
         }
       }, 5 * 60 * 1000);
       console.log('[server] Background Job scheduler active (5m interval)');
+
+      // Automatically run Autopilot Campaign once a day in the background
+      setInterval(async () => {
+        try {
+          const now = new Date();
+          if (now.getHours() === 10 && now.getMinutes() < 10) {
+            console.log('[Scheduler] Running daily scheduled Autopilot Campaign...');
+            await runAutopilotWorkflow(5, false);
+          }
+        } catch (err) {
+          console.error('[Scheduler] Scheduled autopilot run failed:', err.message);
+        }
+      }, 10 * 60 * 1000); // Check every 10 minutes
+      console.log('[server] Daily Scheduled Autopilot active (runs at 10 AM)');
     }
   } catch (err) {
     console.error('[server] Startup error:', err.message);
