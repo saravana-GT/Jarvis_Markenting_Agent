@@ -3360,8 +3360,9 @@ async function pollTelegramBot() {
                 return `${index + 1}. <b>${l.business_name}</b>\n` +
                        `   • <b>Score:</b> <code>${l.score || 0}/100</code> (${l.priority || 'Medium'})\n` +
                        `   • <b>Niche:</b> <code>${l.category || 'Local Business'}</code>\n` +
+                       `   • <b>Phone:</b> <code>${l.public_phone && l.public_phone.trim() !== '' ? l.public_phone : '❌ None'}</code>\n` +
                        `   • <b>Location:</b> <code>${l.location || 'Local'}</code>\n` +
-                       `   • <b>Website:</b> ${l.website && l.website !== 'None' ? l.website : '❌ None'}`;
+                       `   • <b>Website:</b> ${l.public_website && l.public_website !== 'None' ? l.public_website : '❌ None'}`;
               }).join('\n\n');
               await sendTelegramMessage(`🔥 <b>Top Hot Leads (Waiting for Pitch):</b>\n\n${leadsList}`);
             }
