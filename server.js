@@ -2407,7 +2407,8 @@ app.get('/api/gmail/status', requireAuth, async (req, res) => {
     return res.json({ connected: false, reason: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET not configured in .env' });
   }
   const tokens = await db.findRows('oauth_tokens', { provider: 'gmail' });
-  res.json({ connected: tokens.length > 0, credentials_configured: true, has_tokens: tokens.length > 0 });
+  const accounts = tokens.map(t => t.user_id);
+  res.json({ connected: tokens.length > 0, credentials_configured: true, has_tokens: tokens.length > 0, accounts });
 });
 
 app.get('/api/gmail/auth-url', requireAuth, (req, res) => {

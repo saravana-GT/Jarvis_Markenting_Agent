@@ -2166,7 +2166,11 @@
       async function loadMeetingsTab() {
         loadDiscoveryDropdowns();
         const gmailStatus = await fetch('/api/gmail/status').then(r => r.json());
-        document.getElementById('gmailStatusText').textContent = gmailStatus.connected ? 'Connected' : gmailStatus.reason || 'Disconnected';
+        let gmailText = gmailStatus.connected ? 'Connected' : gmailStatus.reason || 'Disconnected';
+        if (gmailStatus.connected && gmailStatus.accounts && gmailStatus.accounts.length > 0) {
+          gmailText += ` (${gmailStatus.accounts.join(', ')})`;
+        }
+        document.getElementById('gmailStatusText').textContent = gmailText;
         
         const calendarStatus = await fetch('/api/calendar/status').then(r => r.json());
         document.getElementById('calendarStatusText').textContent = calendarStatus.connected ? 'Connected' : calendarStatus.reason || 'Disconnected';
