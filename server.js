@@ -1425,15 +1425,15 @@ app.put('/api/outreach/messages/:id/send', requireAuth, async (req, res) => {
         const body = msg.body;
         
         // Construct MIME email
-        const rawMessage = [
+        const emailHeaders = [
           senderEmail ? `From: ${senderEmail}` : '',
           `To: ${toEmail}`,
           `Subject: ${subject}`,
           'Content-Type: text/html; charset=utf-8',
-          'MIME-Version: 1.0',
-          '',
-          body.replace(/\n/g, '<br>')
+          'MIME-Version: 1.0'
         ].filter(Boolean).join('\r\n');
+        
+        const rawMessage = emailHeaders + '\r\n\r\n' + body.replace(/\n/g, '<br>');
 
         const encodedMessage = Buffer.from(rawMessage)
           .toString('base64')
@@ -2877,15 +2877,15 @@ async function executeOverdueJobs() {
 
           if (accessToken) {
             const subject = `Re: Quick suggestion: Web Optimization for ${lead.business_name}`;
-            const emailHeader = [
+            const emailHeaders = [
               senderEmail ? `From: ${senderEmail}` : '',
               `To: ${lead.public_email}`,
               `Subject: ${subject}`,
               'Content-Type: text/html; charset=utf-8',
-              'MIME-Version: 1.0',
-              '',
-              body.replace(/\n/g, '<br>')
+              'MIME-Version: 1.0'
             ].filter(Boolean).join('\n');
+
+            const emailHeader = emailHeaders + '\n\n' + body.replace(/\n/g, '<br>');
 
             const base64Safe = Buffer.from(emailHeader).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
             const gmailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
@@ -3216,15 +3216,15 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
         }
 
         if (accessToken) {
-          const emailHeader = [
+          const emailHeaders = [
             senderEmail ? `From: ${senderEmail}` : '',
             `To: ${lead.public_email}`,
             `Subject: ${message.subject}`,
             'Content-Type: text/html; charset=utf-8',
-            'MIME-Version: 1.0',
-            '',
-            message.body.replace(/\n/g, '<br>')
+            'MIME-Version: 1.0'
           ].filter(Boolean).join('\n');
+
+          const emailHeader = emailHeaders + '\n\n' + message.body.replace(/\n/g, '<br>');
 
           const base64Safe = Buffer.from(emailHeader).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
           const gmailUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
