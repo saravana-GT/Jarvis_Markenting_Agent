@@ -207,7 +207,7 @@ async function ensureDefaults() {
   const defaults = [
     ['daily_contact_limit', '10'], ['follow_up_interval_days', '3'],
     ['max_follow_ups', '4'], ['minimum_acceptable_price', '500'],
-    ['default_advance_percentage', '50'], ['target_industries', 'Web Design, Development, SEO'],
+    ['default_advance_percentage', '50'], ['target_industries', 'Dentists, Restaurants, Gyms, Plumbers, Electricians, Beauty Salons'],
     ['target_locations', 'Local'], ['working_hours', '09:00-17:00'],
     ['meeting_availability', 'Monday-Friday'], ['service_packages', 'Starter, Growth, Premium'],
     ['notification_preferences', 'new_reply,follow_up_due,approval_required,payment_due'],
@@ -2235,7 +2235,10 @@ const validateAiLead = async (req, res, next) => {
 
 app.post('/api/ai/email', requireAuth, validateAiLead, async (req, res) => {
   try {
-    const data = await aiService.generateEmail(req.body.lead_id, req.body);
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.get('host');
+    const baseUrl = `${protocol}://${host}`;
+    const data = await aiService.generateEmail(req.body.lead_id, { ...req.body, baseUrl });
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

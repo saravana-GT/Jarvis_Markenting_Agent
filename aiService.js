@@ -612,7 +612,8 @@ Generate the B2B outreach email according to your instructions. Return JSON only
 
   if (result && result.body) {
     const physicalAddress = "Aandavar Solutions, 12 West Cross Street, Salem, TN, India";
-    const unsubscribeUrl = `http://localhost:3000/api/unsubscribe?lead_id=${leadId}`;
+    const baseUrl = options.baseUrl || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
+    const unsubscribeUrl = `${baseUrl.replace(/\/$/, '')}/api/unsubscribe?lead_id=${leadId}`;
     const footer = `\n\n---\n${physicalAddress}\nIf you no longer wish to receive these emails, you can unsubscribe here: ${unsubscribeUrl}`;
     
     if (!result.body.includes('unsubscribe') && !result.body.includes('Unsubscribe')) {
