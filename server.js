@@ -3198,6 +3198,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
 
     await telegramLog(`✉️ <b>Step 6: Sending emails via Gmail...</b>`);
     let sentCount = 0;
+    const successfulEmails = [];
     for (let i = 0; i < drafts.length; i++) {
       const { message, lead } = drafts[i];
       try {
@@ -3250,6 +3251,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
             await incrementCampaignMetric(query, location, 'sent', 1);
             
             sentCount++;
+            successfulEmails.push(lead.public_email);
             await telegramLog(`✅ Sent email to: <code>${lead.public_email}</code>`);
           } else {
             console.error('Gmail send error response:', await gmailRes.text());
@@ -3266,7 +3268,10 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
       }
     }
 
-    await telegramLog(`🏆 <b>Autopilot Campaign Complete!</b>\nSuccessfully sent: <b>${sentCount}</b> emails.\nNiche: <code>${query}</code> in <code>${location}</code>.`);
+    const emailsListText = successfulEmails.length > 0 
+      ? successfulEmails.map(e => `• <code>${e}</code>`).join('\n') 
+      : 'None';
+    await telegramLog(`🏆 <b>Autopilot Campaign Complete!</b>\n\n🎯 <b>Niche:</b> <code>${query}</code>\n📍 <b>Location:</b> <code>${location}</code>\n📨 <b>Sent Count:</b> <b>${sentCount} / ${drafts.length}</b>\n\n📋 <b>Successfully Reached:</b>\n${emailsListText}`);
   } catch (err) {
     await telegramLog(`❌ <b>Autopilot Failed:</b> ${err.message}`);
   }
@@ -3478,7 +3483,7 @@ async function startServer() {
               const localHour = getCityHour(loc);
               if (localHour === 10) {
                 console.log(`[Scheduler] It is 10:00 AM in ${loc}. Launching scheduled Autopilot Campaign...`);
-                await runAutopilotWorkflow(5, false, loc);
+                await runAutopilotWorkflow(6, false, loc);
               }
             }
           }

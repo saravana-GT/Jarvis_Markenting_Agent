@@ -894,6 +894,14 @@
                 <label>Telegram Chat ID</label>
                 <input type="text" name="telegram_chat_id" placeholder="Chat ID from @userinfobot" />
               </div>
+              <div class="form-group">
+                <label>Target Locations (Comma-separated cities)</label>
+                <input type="text" name="target_locations" placeholder="e.g. New York, London, Sydney, Toronto, Dubai" />
+              </div>
+              <div class="form-group">
+                <label>Target Industries (Comma-separated niches)</label>
+                <input type="text" name="target_industries" placeholder="e.g. Dentists, Restaurants, Gyms, Plumbers, Electricians, Beauty Salons" />
+              </div>
               <div style="display: flex; gap: 10px; margin-top: 15px;">
                 <button class="primary" type="submit" style="flex: 1;">Save Settings</button>
                 <button class="secondary" type="button" id="btnTestGeminiConnection" style="flex: 1; margin: 0;">Test Connection</button>
@@ -2590,6 +2598,8 @@
         genForm.gemini_api_key.value = settings.gemini_api_key || '';
         genForm.telegram_bot_token.value = settings.telegram_bot_token || '';
         genForm.telegram_chat_id.value = settings.telegram_chat_id || '';
+        genForm.target_locations.value = settings.target_locations || 'Local';
+        genForm.target_industries.value = settings.target_industries || '';
       }
 
       document.getElementById('settingsScoringForm').addEventListener('submit', async (e) => {
