@@ -2961,7 +2961,9 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
       const targetIndustries = settings.target_industries ? settings.target_industries.split(',').map(i => i.trim()).filter(Boolean) : defaultIndustries;
 
       if (forcedLocation) {
-        query = targetIndustries[Math.floor(Math.random() * targetIndustries.length)];
+        // Rotate industry daily based on UTC date so all cities use same niche each day
+        const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % targetIndustries.length;
+        query = targetIndustries[dayIndex];
       } else {
         await telegramLog('Smart Campaign Selection running...');
         const targetLocations = settings.target_locations ? settings.target_locations.split(',').map(l => l.trim()).filter(Boolean) : defaultLocations;
