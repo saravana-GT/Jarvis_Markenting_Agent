@@ -2946,7 +2946,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
   };
 
   try {
-    await telegramLog(`🏁 <b>Starting Autopilot Campaign (limit: ${limit})</b>`);
+    // Silent start — only final summary sent to Telegram
 
     const defaultIndustries = ['Dentists', 'Restaurants', 'Beauty Salons', 'Gyms', 'Plumbers', 'Electricians', 'Builders', 'Pest Control', 'Dry Cleaners', 'Daycares', 'House Painters', 'Car detailing'];
     const defaultLocations = ['Austin', 'Seattle', 'Denver', 'Boston', 'Chicago', 'Miami', 'Atlanta', 'Dallas', 'Phoenix', 'Houston', 'San Diego', 'Philadelphia'];
@@ -2965,16 +2965,16 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
         const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % targetIndustries.length;
         query = targetIndustries[dayIndex];
       } else {
-        await telegramLog('Smart Campaign Selection running...');
+        // Smart Campaign Selection running (silent)
         const targetLocations = settings.target_locations ? settings.target_locations.split(',').map(l => l.trim()).filter(Boolean) : defaultLocations;
         const { active, closed } = filterLocationsByBusinessHours(targetLocations);
         let candidateLocations = targetLocations;
 
         if (active.length > 0) {
           candidateLocations = active.map(a => a.name);
-          await telegramLog(`☀️ <b>Active Timezone Routing:</b> Prioritized active cities: ${active.map(a => `${a.name} (${a.hour}:00)`).join(', ')}`);
+          // Active timezone routing (silent)
         } else {
-          await telegramLog(`🌙 <b>No cities currently in active business hours (9 AM - 5 PM).</b> Proceeding with all: ${closed.map(c => `${c.name} (${c.hour}:00)`).join(', ')}`);
+          // No active cities (silent)
         }
 
       let bestCombo = null;
@@ -3006,9 +3006,9 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
     }
   }
 
-    await telegramLog(`🎯 <b>Campaign parameters selected:</b>\nQuery: <code>${query}</code>\nLocation: <code>${location}</code>\nSelection: <i>${selectionReason}</i>`);
+    // Campaign parameters selected (silent)
 
-    await telegramLog(`🔍 <b>Step 1: Discovering leads...</b>`);
+    // Step 1: Discovering leads (silent)
     const apiKey = process.env.GOOGLE_MAPS_DEMO_KEY;
     if (!apiKey) throw new Error('GOOGLE_MAPS_DEMO_KEY not configured.');
 
@@ -3041,10 +3041,10 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
       discovery_date: new Date().toISOString()
     }));
 
-    await telegramLog(`✅ Discovered <b>${discovered.length}</b> businesses.`);
+    // Discovered businesses (silent)
     if (discovered.length === 0) return;
 
-    await telegramLog(`📥 <b>Step 2: Importing leads into CRM...</b>`);
+    // Step 2: Importing leads (silent)
     const savedLeads = [];
     for (const item of discovered) {
       if (isDuplicateLead(item)) {
@@ -3086,16 +3086,16 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
       savedLeads.push(lead);
     }
 
-    await telegramLog(`CRM: Imported <b>${savedLeads.length}</b> leads.`);
+    // CRM import done (silent)
     if (savedLeads.length === 0) return;
 
-    await telegramLog(`🕸️ <b>Step 3: Auditing websites & extracting emails...</b>`);
+    // Step 3: Auditing websites (silent)
     const analyzedLeads = [];
     for (let i = 0; i < savedLeads.length; i++) {
       const lead = savedLeads[i];
       if (!lead.public_website) continue;
       
-      await telegramLog(`Analyzing site (${i + 1}/${savedLeads.length}): <code>${lead.public_website}</code>`);
+      // Analyzing site (silent)
       try {
         const analysis = await analyzeWebsiteForLead(lead);
         const email = analysis.extracted_email || null;
@@ -3118,7 +3118,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
         await db.insertRow('lead_stage_history', { id: uuidv4(), lead_id: lead.id, stage, changed_at: now, created_at: now });
         
         if (email) {
-          await telegramLog(`📧 Extracted Email: <code>${email}</code> for <b>${lead.business_name}</b>`);
+          // Email extracted (silent)
         }
         analyzedLeads.push(updatedLead);
       } catch (err) {
@@ -3127,7 +3127,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    await telegramLog(`📈 <b>Step 4: Scoring and Qualifying Leads...</b>`);
+    // Step 4: Scoring (silent)
     const qualifiedLeads = [];
     for (const lead of analyzedLeads) {
       const { score, rulesTriggered } = calculateLeadScore(lead);
@@ -3154,10 +3154,10 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
       }
     }
 
-    await telegramLog(`Qualified: <b>${qualifiedLeads.length}</b> leads. Preparing drafts...`);
+    // Qualified leads count (silent)
     if (qualifiedLeads.length === 0) return;
 
-    await telegramLog(`✍️ <b>Step 5: Generating personalized emails...</b>`);
+    // Step 5: Generating emails (silent)
     const drafts = [];
     for (let i = 0; i < Math.min(qualifiedLeads.length, limit); i++) {
       const lead = qualifiedLeads[i];
@@ -3190,7 +3190,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
           };
           const savedMsg = await db.insertRow('outreach_messages', outreachMsg);
           drafts.push({ message: savedMsg, lead });
-          await telegramLog(`Draft created: <b>${lead.business_name}</b>`);
+          // Draft created (silent)
         }
       } catch (err) {
         console.error('Draft generation failed:', err.message);
@@ -3198,7 +3198,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
       await new Promise(resolve => setTimeout(resolve, 4000));
     }
 
-    await telegramLog(`✉️ <b>Step 6: Sending emails via Gmail...</b>`);
+    // Step 6: Sending emails (silent)
     let sentCount = 0;
     const successfulEmails = [];
     for (let i = 0; i < drafts.length; i++) {
@@ -3254,7 +3254,7 @@ async function runAutopilotWorkflow(limit, randomize = false, forcedLocation = n
             
             sentCount++;
             successfulEmails.push(lead.public_email);
-            await telegramLog(`✅ Sent email to: <code>${lead.public_email}</code>`);
+            // Email sent (silent)
           } else {
             console.error('Gmail send error response:', await gmailRes.text());
           }
